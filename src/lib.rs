@@ -29,10 +29,18 @@ use std::result::Result as StdResult;
 ///
 /// This trait would normally be derived through the (yet to be written) luther-derive crate.
 pub trait Lexer: Sized {
+    /// The deterministic finite automaton for the lexer.
+    type Dfa: dfa::Dfa<Self>;
+
     /// Creates a lexer from the supplied `char` iterator.
     ///
-    /// The return type is an iterator over `Self` (or rather `Result<Span<Self>>`).
-    fn lexer<I,F>(input: I) -> dfa::Lexer<Self>
+    /// # Type Parameters
+    /// - F: the failure type for the input falible iterator
+    /// - I: a type convertable to a falible iterator over `Span<char>`
+    ///
+    /// # Returns
+    /// An fallible iterator over `Span<Self>`.
+    fn lexer<F,I>(input: I) -> dfa::Lexer<Self, F, <I as IntoIterator>::IntoIter, Self::Dfa>
         where I: IntoIterator<Item=StdResult<Span<char>, F>>,
               F: failure::Fail;
 }
