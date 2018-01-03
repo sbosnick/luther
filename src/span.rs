@@ -33,6 +33,13 @@ impl<T> Span<T> {
     pub fn extend(&mut self, end: Location) {
         self.end = end;
     }
+
+    /// Consumes the span, returning a (start, value, end) tuple.
+    ///
+    /// This is the format expected for a lalrpop external lexer.
+    pub fn into_inner(self) -> (Location, T, Location) {
+        (self.start, self.value, self.end)
+    }
 }
 
 impl From<(usize, char)> for Span<char> {
@@ -42,7 +49,8 @@ impl From<(usize, char)> for Span<char> {
     /// `str::char_indicies()` method. It assumes the pos is the starting position and that the value
     /// is encoded in utf8.
     fn from((pos, value): (usize, char) ) -> Self {
-        Self::new(pos.into(), (pos + value.len_utf8()).into(), value)
+        // Note: The end Location has "- 1" to make the (start, end) interval a closed interval.
+        Self::new(pos.into(), (pos + value.len_utf8() - 1).into(), value)
     }
 }
 
@@ -117,12 +125,22 @@ mod test {
     }
 
     #[test]
-    fn span_from_usize_char_gives_expected_result() {
+    fn span_from_usize_char_gives_expected_result_for_euro_sign() {
         let value = '€';
         let pos = 5;
 
         let sut: Span<char> = (pos, value).into();
 
-        assert_eq!(sut, Span::new(pos.into(), (pos+ 3).into(), value));
+        assert_eq!(sut, Span::new(pos.into(), (pos + 3 - 1).into(), value));
+    }
+
+    #[test]
+    fn span_from_usize_char_give_expected_result_for_a() {
+        let value = 'a';
+        let pos = 0;
+
+        let sut: Span<char> = (pos, value).into();
+
+        assert_eq!(sut, Span::new(pos.into(), pos.into(), value));
     }
 }

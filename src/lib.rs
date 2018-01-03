@@ -15,6 +15,10 @@
 #[macro_use]
 extern crate failure;
 
+#[cfg(test)]
+#[macro_use]
+extern crate assert_matches;
+
 mod error;
 mod span;
 pub mod dfa;

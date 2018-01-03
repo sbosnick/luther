@@ -1,13 +1,30 @@
 use std::result;
+use failure::Fail;
 
 /// The error type for the lexers produced by Lexer implementations.
 #[derive(Debug, Fail)]
-pub enum LexError {
+pub enum LexError<F: Fail> {
     /// The lexer encountered an invalid chararter in the input. This error occurs
     /// when the invalid character would be the first character of a new token.
     #[fail(display = "The lexer encountered an invalid character in the input: {}.", _0)]
     InvalidCharacter(char),
+
+    /// The lexer encountered an invalid token in the input. This error occurs
+    /// when the lexer has consumed some valid characters but cannot make further
+    /// progress and the consumed characters do not form a valid token.
+    #[fail(display = "The lexer encountered an invalid token: {}.", _0)]
+    InvalidToken(String),
+
+    /// The lexer encountered an error in the input stream.
+    #[fail(display = "The lexer encountered an input error.")]
+    InputError(#[cause] F)
+}
+
+impl<F: Fail> From<F> for LexError<F> {
+    fn from(f: F) -> LexError<F> {
+        LexError::InputError(f)
+    }
 }
 
 /// A specialized Result type for lexer operations.
-pub type Result<T> = result::Result<T, LexError>;
+pub type Result<T, F> = result::Result<T, LexError<F>>;

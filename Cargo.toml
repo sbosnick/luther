@@ -6,3 +6,6 @@ description = "The runtime components of the Luther lexer generator."
 
 [dependencies]
 failure = "0.1.1"
+
+[dev-dependencies]
+assert_matches = "1.1.0"
