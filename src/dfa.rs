@@ -1,4 +1,4 @@
-//! Defines the `Lexer` iterator that lexes a `char` iterator using a supplied deterministic
+//! Defines the `LexerIter` iterator that lexes a `char` iterator using a supplied deterministic
 //! finite automaton.
 
 use std::iter;
@@ -12,7 +12,7 @@ use super::{Span, Result, LexError, Location};
 /// The generic type `T` is the token type.
 ///
 /// The iterator is a falible iterator over `Span<T>` where the span runs from the start of the
-/// first `char` that is part of the token to the end of the last `char`. `Lexer` performs a
+/// first `char` that is part of the token to the end of the last `char`. `LexerIter` performs a
 /// maximal-munch lex of a falible `Span<char>` iterator using a supplied deterministic finite
 /// automaton ("dfa").
 ///
@@ -21,7 +21,7 @@ use super::{Span, Result, LexError, Location};
 /// - F: the failure type for the falible input iterator
 /// - I: the falible input iterator type over `Span<char>`
 /// - D: the deterministic finite automaton that return `T` tokens in accepting states
-pub struct Lexer<T, F, I, D>
+pub struct LexerIter<T, F, I, D>
 where I: Iterator<Item=StdResult<Span<char>,F>>,
       F: Fail,
       D: Dfa<T>
@@ -31,14 +31,14 @@ where I: Iterator<Item=StdResult<Span<char>,F>>,
     _t: PhantomData<T>
 }
 
-impl<T,F,I,D> Lexer<T,F,I,D>
+impl<T,F,I,D> LexerIter<T,F,I,D>
 where I: Iterator<Item=StdResult<Span<char>,F>>,
       F: Fail,
       D: Dfa<T>
 {
-    /// Create a new `Lexer` from the supplied iterator.
-    pub fn new(input: I) -> Lexer<T,F,I,D> {
-        Lexer{ input: input.peekable(), _d: PhantomData, _t: PhantomData }
+    /// Create a new `LexerIter` from the supplied iterator.
+    pub fn new(input: I) -> LexerIter<T,F,I,D> {
+        LexerIter{ input: input.peekable(), _d: PhantomData, _t: PhantomData }
     }
 
     // The Ok return is what is needed to drive the Iterator::next() loop. The Err
@@ -72,7 +72,7 @@ where I: Iterator<Item=StdResult<Span<char>,F>>,
     }
 }
 
-impl<T,F,I,D> Iterator for Lexer<T,F,I,D>
+impl<T,F,I,D> Iterator for LexerIter<T,F,I,D>
 where I: Iterator<Item=StdResult<Span<char>,F>>,
       F: Fail,
       D: Dfa<T>
@@ -141,7 +141,7 @@ where I: Iterator<Item=StdResult<Span<char>,F>>,
 pub trait Dfa<T>: Default {
     /// Test for an error state for the `Dfa`.
     ///
-    /// Error states are used by `Lexer` to implement maximal-munch lexing.
+    /// Error states are used by `LexerIter` to implement maximal-munch lexing.
     fn is_error(&self) -> bool;
 
     /// The transition function for the the `Dfa`.
@@ -220,7 +220,7 @@ mod test {
     #[fail(display = "The impossible has happend: NoFail has failed.")]
     struct NoFail {}
 
-    type DfaLexer<I> = Lexer<Tokens, NoFail, I, DfaStates>;
+    type DfaLexer<I> = LexerIter<Tokens, NoFail, I, DfaStates>;
 
     #[derive(Debug,Fail,Clone)]
     enum FakeError{ 
@@ -235,7 +235,7 @@ mod test {
         }
     }
 
-    type FakeLexer<I> = Lexer<Tokens, FakeError, I, DfaStates>;
+    type FakeLexer<I> = LexerIter<Tokens, FakeError, I, DfaStates>;
 
     #[test]
     fn lexer_is_some_ok_for_accepted_input() {

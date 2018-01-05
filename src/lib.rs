@@ -55,10 +55,10 @@ pub trait Lexer: Sized {
     ///
     /// # Returns
     /// An fallible iterator over `Span<Self>`.
-    fn lexer<F,I>(input: I) -> dfa::Lexer<Self, F, <I as IntoIterator>::IntoIter, Self::Dfa>
+    fn lexer<F,I>(input: I) -> dfa::LexerIter<Self, F, <I as IntoIterator>::IntoIter, Self::Dfa>
         where I: IntoIterator<Item=StdResult<Span<char>, F>>,
               F: failure::Fail
     {
-        dfa::Lexer::new(input.into_iter())
+        dfa::LexerIter::new(input.into_iter())
     }
 }
