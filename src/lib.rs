@@ -19,6 +19,17 @@ extern crate failure;
 #[macro_use]
 extern crate assert_matches;
 
+#[cfg(test)]
+#[macro_use]
+extern crate quickcheck;
+
+#[cfg(test)]
+#[macro_use]
+extern crate lazy_static;
+
+#[cfg(test)]
+extern crate regex;
+
 mod error;
 mod span;
 pub mod dfa;

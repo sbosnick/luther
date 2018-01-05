@@ -172,6 +172,8 @@ pub trait Dfa<T>: Default {
 mod test {
     use super::*;
     use std::str;
+    use quickcheck;
+    use regex::Regex;
 
     #[derive(PartialEq, Eq, Debug)]
     enum Tokens {
@@ -220,10 +222,17 @@ mod test {
 
     type DfaLexer<I> = Lexer<Tokens, NoFail, I, DfaStates>;
 
-    #[derive(Debug,Fail)]
+    #[derive(Debug,Fail,Clone)]
     enum FakeError{ 
         #[fail(display = "An input error has occured.")]
         InputError 
+    }
+
+    impl quickcheck::Arbitrary for FakeError {
+        fn arbitrary<G: quickcheck::Gen>(_: &mut G) -> Self {
+            // There is only 1 FakeError value so return it
+            FakeError::InputError
+        }
     }
 
     type FakeLexer<I> = Lexer<Tokens, FakeError, I, DfaStates>;
@@ -330,5 +339,26 @@ mod test {
         let result: StdResult<Vec<_>,_> = sut.collect();
 
         assert_matches!(result, Err(LexError::InputError(FakeError::InputError)));
+    }
+
+    quickcheck! {
+        fn prop_lexer_matches_regex(input: Vec<StdResult<char,FakeError>>) -> bool {
+            use LexError::*;
+            lazy_static! {
+                static ref RE: Regex = Regex::new("^a(b|c)c*$").unwrap();
+            }
+            let input = input.into_iter().map(|r| r.map(|c| Span::new(0.into(), 0.into(), c)));
+
+            let sut = FakeLexer::new(input)
+                .map(|r| r.map(|s| s.into_inner().1));
+            let result: StdResult<Vec<_>,_> = sut.collect();
+
+            match result {
+                Err(InputError(_)) => true,
+                Err(InvalidCharacter(c)) => c != 'a',
+                Err(InvalidToken(s)) => !RE.is_match(&s),
+                Ok(vec) => vec.into_iter().all(|Tokens::Token1(s)| RE.is_match(&s))
+            }
+        }
     }
 }
