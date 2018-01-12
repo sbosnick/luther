@@ -61,7 +61,7 @@ impl luther::Lexer for Tokens {
     type Dfa = TokensDfa;
 }
 
-// End luther-dervie examplar
+// End luther-dervie exemplar
 
 #[derive(Fail, Debug)]
 enum NoError {}
