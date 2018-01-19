@@ -13,13 +13,13 @@ use std::ops;
 pub struct Span<T> {
     start: Location,
     end: Location,
-    value: T
+    value: T,
 }
 
 impl<T> Span<T> {
     /// Create a new `Span` for a given start and end `Location` and value.
     pub fn new(start: Location, end: Location, value: T) -> Span<T> {
-        Span{start, end, value}
+        Span { start, end, value }
     }
 
     /// Gets the start `Location` of the `Span`.
@@ -56,7 +56,7 @@ impl From<(usize, char)> for Span<char> {
     /// This conversion is designed to support the Item type of the iterator returned from the
     /// `str::char_indicies()` method. It assumes the pos is the starting position and that the value
     /// is encoded in utf8.
-    fn from((pos, value): (usize, char) ) -> Self {
+    fn from((pos, value): (usize, char)) -> Self {
         // Note: The end Location has "- 1" to make the (start, end) interval a closed interval.
         Self::new(pos.into(), (pos + value.len_utf8() - 1).into(), value)
     }
@@ -74,7 +74,7 @@ impl From<(usize, char)> for Span<char> {
 /// Adding a usize to a `Location` will panic if the resulting `Location` value is greater than
 /// `usize::max_value()`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Default)]
-pub struct Location (usize);
+pub struct Location(usize);
 
 impl Location {
     /// Create a new `Location` for a given starting point.

@@ -43,7 +43,7 @@ mod span;
 pub mod dfa;
 
 pub use error::{LexError, Result};
-pub use span::{Span, Location};
+pub use span::{Location, Span};
 
 use std::result::Result as StdResult;
 
@@ -63,9 +63,10 @@ pub trait Lexer: Sized {
     ///
     /// # Returns
     /// An fallible iterator over `Span<Self>`.
-    fn lexer<F,I>(input: I) -> dfa::LexerIter<Self, F, <I as IntoIterator>::IntoIter, Self::Dfa>
-        where I: IntoIterator<Item=StdResult<Span<char>, F>>,
-              F: failure::Fail
+    fn lexer<F, I>(input: I) -> dfa::LexerIter<Self, F, <I as IntoIterator>::IntoIter, Self::Dfa>
+    where
+        I: IntoIterator<Item = StdResult<Span<char>, F>>,
+        F: failure::Fail,
     {
         dfa::LexerIter::new(input.into_iter())
     }

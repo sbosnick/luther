@@ -13,7 +13,7 @@ use std::iter;
 use std::result::Result as StdResult;
 use std::marker::PhantomData;
 use failure::Fail;
-use super::{Span, Result, LexError, Location};
+use super::{LexError, Location, Result, Span};
 
 /// The iterator that lexes a `char` iterator into a token iterator.
 ///
@@ -30,23 +30,29 @@ use super::{Span, Result, LexError, Location};
 /// - I: the falible input iterator type over `Span<char>`
 /// - D: the deterministic finite automaton that return `T` tokens in accepting states
 pub struct LexerIter<T, F, I, D>
-where I: Iterator<Item=StdResult<Span<char>,F>>,
-      F: Fail,
-      D: Dfa<T>
+where
+    I: Iterator<Item = StdResult<Span<char>, F>>,
+    F: Fail,
+    D: Dfa<T>,
 {
     input: iter::Peekable<I>,
     _d: PhantomData<D>,
-    _t: PhantomData<T>
+    _t: PhantomData<T>,
 }
 
-impl<T,F,I,D> LexerIter<T,F,I,D>
-where I: Iterator<Item=StdResult<Span<char>,F>>,
-      F: Fail,
-      D: Dfa<T>
+impl<T, F, I, D> LexerIter<T, F, I, D>
+where
+    I: Iterator<Item = StdResult<Span<char>, F>>,
+    F: Fail,
+    D: Dfa<T>,
 {
     /// Create a new `LexerIter` from the supplied iterator.
-    pub fn new(input: I) -> LexerIter<T,F,I,D> {
-        LexerIter{ input: input.peekable(), _d: PhantomData, _t: PhantomData }
+    pub fn new(input: I) -> LexerIter<T, F, I, D> {
+        LexerIter {
+            input: input.peekable(),
+            _d: PhantomData,
+            _t: PhantomData,
+        }
     }
 
     // The Ok return is what is needed to drive the Iterator::next() loop. The Err
@@ -75,15 +81,16 @@ where I: Iterator<Item=StdResult<Span<char>,F>>,
         match self.input.next() {
             None => Err(None),
             Some(Err(err)) => Err(Some(Err(err.into()))),
-            Some(Ok(span)) => Err(Some(Err(LexError::InvalidCharacter(*span.value_ref()))))
+            Some(Ok(span)) => Err(Some(Err(LexError::InvalidCharacter(*span.value_ref())))),
         }
     }
 }
 
-impl<T,F,I,D> Iterator for LexerIter<T,F,I,D>
-where I: Iterator<Item=StdResult<Span<char>,F>>,
-      F: Fail,
-      D: Dfa<T>
+impl<T, F, I, D> Iterator for LexerIter<T, F, I, D>
+where
+    I: Iterator<Item = StdResult<Span<char>, F>>,
+    F: Fail,
+    D: Dfa<T>,
 {
     type Item = Result<Span<T>, F>;
 
@@ -91,7 +98,7 @@ where I: Iterator<Item=StdResult<Span<char>,F>>,
         // Initialize the dfa and tracking state
         let (start, mut end, mut state) = match self.init_dfa() {
             Ok(ok) => ok,
-            Err(err) => return err
+            Err(err) => return err,
         };
 
         let mut tok_str = String::new();
@@ -109,7 +116,7 @@ where I: Iterator<Item=StdResult<Span<char>,F>>,
                     state = next_state;
                     end = span.end();
                     tok_str.push(*span.value_ref());
-                },
+                }
                 _ => break,
             }
 
@@ -117,9 +124,12 @@ where I: Iterator<Item=StdResult<Span<char>,F>>,
         }
 
         // Return the accepted token or InvalidToken
-        Some(state.accept(&tok_str)
-                        .map(|t| Span::new(start, end, t))
-                        .ok_or(LexError::InvalidToken(tok_str)))
+        Some(
+            state
+                .accept(&tok_str)
+                .map(|t| Span::new(start, end, t))
+                .ok_or(LexError::InvalidToken(tok_str)),
+        )
     }
 }
 
@@ -190,7 +200,12 @@ mod test {
 
     // This dfa corresponds to the re "a(b|c)c*"
     #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
-    enum DfaStates { State0, State1, State2, State3 }
+    enum DfaStates {
+        State0,
+        State1,
+        State2,
+        State3,
+    }
 
     impl Default for DfaStates {
         fn default() -> Self {
@@ -224,16 +239,15 @@ mod test {
         }
     }
 
-    #[derive(Debug,Fail)]
+    #[derive(Debug, Fail)]
     #[fail(display = "The impossible has happend: NoFail has failed.")]
     struct NoFail {}
 
     type DfaLexer<I> = LexerIter<Tokens, NoFail, I, DfaStates>;
 
-    #[derive(Debug,Fail,Clone)]
-    enum FakeError{ 
-        #[fail(display = "An input error has occured.")]
-        InputError 
+    #[derive(Debug, Fail, Clone)]
+    enum FakeError {
+        #[fail(display = "An input error has occured.")] InputError,
     }
 
     impl quickcheck::Arbitrary for FakeError {
@@ -249,8 +263,7 @@ mod test {
     fn lexer_is_some_ok_for_accepted_input() {
         let input = "ab".char_indices().map(|i| Ok(i.into()));
 
-        let mut sut = DfaLexer::new(input)
-            .map(|r| r.map(|s| s.into_inner()));
+        let mut sut = DfaLexer::new(input).map(|r| r.map(|s| s.into_inner()));
         let result = sut.next();
 
         assert_matches!(result, Some(Ok((s, Tokens::Token1(_), e)))
@@ -261,8 +274,7 @@ mod test {
     fn lexer_is_none_for_empty_input() {
         let input = "".char_indices().map(|i| Ok(i.into()));
 
-        let mut sut = DfaLexer::new(input)
-            .map(|r| r.map(|s| s.into_inner()));
+        let mut sut = DfaLexer::new(input).map(|r| r.map(|s| s.into_inner()));
         let result = sut.next();
 
         assert_matches!(result, None);
@@ -272,8 +284,7 @@ mod test {
     fn lexer_is_some_err_invalid_token_for_rejected_input() {
         let input = "a".char_indices().map(|i| Ok(i.into()));
 
-        let mut sut = DfaLexer::new(input)
-            .map(|r| r.map(|s| s.into_inner()));
+        let mut sut = DfaLexer::new(input).map(|r| r.map(|s| s.into_inner()));
         let result = sut.next();
 
         assert_matches!(result, Some(Err(LexError::InvalidToken(ref s)))
@@ -284,8 +295,7 @@ mod test {
     fn lexer_is_some_err_invalid_character_for_invalid_initial_character() {
         let input = "b".char_indices().map(|i| Ok(i.into()));
 
-        let mut sut = DfaLexer::new(input)
-            .map(|r| r.map(|s| s.into_inner()));
+        let mut sut = DfaLexer::new(input).map(|r| r.map(|s| s.into_inner()));
         let result = sut.next();
 
         assert_matches!(result, Some(Err(LexError::InvalidCharacter('b'))));
@@ -295,22 +305,27 @@ mod test {
     fn lexer_is_some_err_input_error_for_initial_input_error() {
         let input = vec![Err(FakeError::InputError)];
 
-        let mut sut = FakeLexer::new(input.into_iter())
-            .map(|r| r.map(|s| s.into_inner()));
+        let mut sut = FakeLexer::new(input.into_iter()).map(|r| r.map(|s| s.into_inner()));
         let result = sut.next();
 
-        assert_matches!(result, Some(Err(LexError::InputError(FakeError::InputError))));
+        assert_matches!(
+            result,
+            Some(Err(LexError::InputError(FakeError::InputError)))
+        );
     }
 
     #[test]
     fn lexer_matches_consecutive_tokens_in_input() {
         let input = "abacabccc".char_indices().map(|i| Ok(i.into()));
 
-        let sut = DfaLexer::new(input)
-            .map(|r| r.map(|s| s.into_inner().1));
-        let result: StdResult<Vec<_>,_> = sut.collect();
-        let strings: Vec<_> = result.expect("DfaLexer had an unexpected error.").into_iter()
-            .map(|tok| match tok { Tokens::Token1(s) => s })
+        let sut = DfaLexer::new(input).map(|r| r.map(|s| s.into_inner().1));
+        let result: StdResult<Vec<_>, _> = sut.collect();
+        let strings: Vec<_> = result
+            .expect("DfaLexer had an unexpected error.")
+            .into_iter()
+            .map(|tok| match tok {
+                Tokens::Token1(s) => s,
+            })
             .collect();
 
         assert_eq!(strings, vec!["ab", "ac", "abccc"])
@@ -320,9 +335,8 @@ mod test {
     fn lexer_is_invalid_character_for_invalid_second_token_in_input() {
         let input = "abb".char_indices().map(|i| Ok(i.into()));
 
-        let sut = DfaLexer::new(input)
-            .map(|r| r.map(|s| s.into_inner().1));
-        let result: StdResult<Vec<_>,_> = sut.collect();
+        let sut = DfaLexer::new(input).map(|r| r.map(|s| s.into_inner().1));
+        let result: StdResult<Vec<_>, _> = sut.collect();
 
         assert_matches!(result, Err(LexError::InvalidCharacter('b')));
     }
@@ -331,20 +345,22 @@ mod test {
     fn lexer_is_invalid_token_for_invalid_second_token_in_input() {
         let input = "aba".char_indices().map(|i| Ok(i.into()));
 
-        let sut = DfaLexer::new(input)
-            .map(|r| r.map(|s| s.into_inner().1));
-        let result: StdResult<Vec<_>,_> = sut.collect();
+        let sut = DfaLexer::new(input).map(|r| r.map(|s| s.into_inner().1));
+        let result: StdResult<Vec<_>, _> = sut.collect();
 
         assert_matches!(result, Err(LexError::InvalidToken(_)));
     }
 
     #[test]
     fn lexer_is_input_error_for_subsequent_input_error() {
-        let input = vec![Ok((0, 'a').into()), Ok((1,'b').into()), Err(FakeError::InputError)];
+        let input = vec![
+            Ok((0, 'a').into()),
+            Ok((1, 'b').into()),
+            Err(FakeError::InputError),
+        ];
 
-        let sut = FakeLexer::new(input.into_iter())
-            .map(|r| r.map(|s| s.into_inner()));
-        let result: StdResult<Vec<_>,_> = sut.collect();
+        let sut = FakeLexer::new(input.into_iter()).map(|r| r.map(|s| s.into_inner()));
+        let result: StdResult<Vec<_>, _> = sut.collect();
 
         assert_matches!(result, Err(LexError::InputError(FakeError::InputError)));
     }

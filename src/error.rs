@@ -25,7 +25,7 @@ pub enum LexError<F: Fail> {
 
     /// The lexer encountered an error in the input stream.
     #[fail(display = "The lexer encountered an input error.")]
-    InputError(#[cause] F)
+    InputError(#[cause] F),
 }
 
 impl<F: Fail> From<F> for LexError<F> {
