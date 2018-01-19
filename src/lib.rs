@@ -1,3 +1,11 @@
+// Copyright 2018 Steven Bosnick
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE-2.0 or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms
+
 //! A library for creating a lexer for a token type.
 //!
 //! The motivating case for this crate is a token enum that has the `Lexer` trait implemented on
