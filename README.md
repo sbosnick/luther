@@ -39,7 +39,7 @@ before Luther is ready for prime-time. Also, the proc-macro crate will have
 to be implmented.
 
 The intention is for the `tokens` iterator from the above example to be a
-suitable candate for an external for the parser generator [Lalrpop].
+suitable candate for an external lexer for the parser generator [Lalrpop].
 
 [Lalrpop]:https://crates.io/crates/lalrpop
 
