@@ -19,15 +19,15 @@ use super::{LexError, Location, Result, Span};
 ///
 /// The generic type `T` is the token type.
 ///
-/// The iterator is a falible iterator over `Span<T>` where the span runs from the start of the
+/// The iterator is a fallible iterator over `Span<T>` where the span runs from the start of the
 /// first `char` that is part of the token to the end of the last `char`. `LexerIter` performs a
-/// maximal-munch lex of a falible `Span<char>` iterator using a supplied deterministic finite
+/// maximal-munch lex of a fallible `Span<char>` iterator using a supplied deterministic finite
 /// automaton ("dfa").
 ///
 /// # Type Parameters
 /// - T: the token type
-/// - F: the failure type for the falible input iterator
-/// - I: the falible input iterator type over `Span<char>`
+/// - F: the failure type for the fallible input iterator
+/// - I: the fallible input iterator type over `Span<char>`
 /// - D: the deterministic finite automaton that return `T` tokens in accepting states
 pub struct LexerIter<T, F, I, D>
 where

@@ -14,8 +14,8 @@
 //! The `Lexer` trait would normally be derived through the (yet to be written) luther-derive
 //! crate.
 //!
-//! The input to the `lexer` method is a falible iterator (i.e. an iterator with a Result item
-//! type) over a `Span` of `char`. The output is a falible iterator over a `Span` of the token
+//! The input to the `lexer` method is a fallible iterator (i.e. an iterator with a Result item
+//! type) over a `Span` of `char`. The output is a fallible iterator over a `Span` of the token
 //! type.
 
 #![deny(missing_docs)]
@@ -58,8 +58,8 @@ pub trait Lexer: Sized {
     /// Creates a lexer from the supplied `char` iterator.
     ///
     /// # Type Parameters
-    /// - F: the failure type for the input falible iterator
-    /// - I: a type convertable to a falible iterator over `Span<char>`
+    /// - F: the failure type for the input fallible iterator
+    /// - I: a type convertable to a fallible iterator over `Span<char>`
     ///
     /// # Returns
     /// An fallible iterator over `Span<Self>`.
