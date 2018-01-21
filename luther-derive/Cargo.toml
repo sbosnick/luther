@@ -12,3 +12,5 @@ quote = "0.4"
 
 [dev-dependencies]
 luther = {path = ".."}
+assert_matches = "1.1.0"
+failure = "0.1.1"
