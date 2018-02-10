@@ -112,6 +112,8 @@ extern crate syn;
 #[macro_use]
 extern crate quote;
 
+mod enum_info;
+
 use proc_macro::TokenStream;
 use syn::DeriveInput;
 
@@ -122,7 +124,9 @@ use syn::DeriveInput;
 /// attribute.
 #[proc_macro_derive(Lexer, attributes(luther))]
 pub fn luther_derive(input: TokenStream) -> TokenStream {
-    let _ast: DeriveInput = syn::parse(input).expect("failed to parse the input token stream");
+    let ast: DeriveInput = syn::parse(input).expect("failed to parse the input token stream");
+
+    let _info: enum_info::EnumInfo = (&ast).into();
 
     let expanded = quote!{};
 

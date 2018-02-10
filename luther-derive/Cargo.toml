@@ -7,8 +7,11 @@ authors = ["Steven Bosnick <sbosnick@sympatico.ca>"]
 proc-macro = true
 
 [dependencies]
-syn = "0.12"
 quote = "0.4"
+
+[dependencies.syn]
+version = "0.12"
+features = ["visit"]
 
 [dev-dependencies]
 luther = {path = ".."}
