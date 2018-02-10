@@ -10,12 +10,19 @@ use std::fmt;
 
 use syn::{self, visit};
 
+/// `EnumInfo` gathers the relevant information about an `enum`
+/// for which `Lexer` is being derived. The main way of constructing
+/// an `EnumInfo` is through its `From<syn::DeriveInput>` implementation.
 pub struct EnumInfo<'ast> {
     pub name: &'ast syn::Ident,
     pub dfa_name: String,
     pub variants: Vec<VariantInfo<'ast>>,
 }
 
+/// `VariantInfo` gathers the relevant information a variant of an `enum`
+/// for which `Lexer` is being derived. The main way of constructing
+/// a `VariantInfo` is through the `From<syn::DeriveInput> implementation
+/// for `EnumInfo`.
 pub struct VariantInfo<'ast> {
     pub name: &'ast syn::Ident,
     pub regex: String,
