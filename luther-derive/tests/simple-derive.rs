@@ -1,6 +1,3 @@
-// TODO: remove this once the proc_macro is implemented.
-#![allow(dead_code)]
-
 extern crate luther;
 
 #[macro_use]
@@ -9,8 +6,8 @@ extern crate luther_derive;
 #[macro_use]
 extern crate failure;
 
-//#[macro_use]
-//extern crate assert_matches;
+#[macro_use]
+extern crate assert_matches;
 
 #[derive(Lexer, Debug)]
 enum Token {
@@ -57,14 +54,14 @@ where
     }
 }
 
-// TODO: uncomment the contents of the test once the proc_macro is implemented.
 #[test]
+#[ignore]
 fn token_lexes_ab() {
-    //use luther::Lexer;
-    //let input = SpanedStrIter::new("ab");
+    use luther::Lexer;
+    let input = SpanedStrIter::new("ab");
 
-    //let sut = Token::lexer(input).map(|r| r.map(|s| s.into_inner().1));
-    //let result = sut.next();
+    let mut sut = Token::lexer(input).map(|r| r.map(|s| s.into_inner().1));
+    let result = sut.next();
 
-    //assert_matches!(result, Some(Ok(Token::Ab)));
+    assert_matches!(result, Some(Ok(Token::Ab)));
 }

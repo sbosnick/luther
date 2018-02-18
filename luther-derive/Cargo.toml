@@ -8,6 +8,7 @@ proc-macro = true
 
 [dependencies]
 quote = "0.4"
+redfa = "0.0.2"
 
 [dependencies.syn]
 version = "0.12"
