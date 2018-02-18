@@ -14,6 +14,16 @@ use enum_info;
 type State<'ast> = redfa::State<char, Option<enum_info::VariantInfo<'ast>>>;
 type Dfa<'ast> = redfa::Dfa<char, Option<enum_info::VariantInfo<'ast>>>;
 
+/// Generates a dfa enum, implements `Default` and `luther::dfa::Dfa` for that
+/// enum, and implements `luther::Lexer` for the enum described in `info`.
+///
+/// The dfa enum will be named from `info.dfa_name` and will have variants "State0",
+/// "State1", "State2", etc. State0 is the `Default` variant and `error_state`
+/// designates which state will be recognized by `is_error()`.
+///
+/// Both transition() and accept() are geneated from the `dfa.states` vector.
+/// The default transition() if nothing else is specified in `dfa.states` is
+/// to the error state.
 pub fn generate_lexer_impl<'ast>(
     info: &'ast enum_info::EnumInfo<'ast>,
     dfa: &'ast Dfa<'ast>,
