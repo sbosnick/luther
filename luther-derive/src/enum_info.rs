@@ -302,8 +302,7 @@ impl<'meta> visit::Visit<'meta> for LutherAttrOptionBuilder {
     fn visit_lit_bool(&mut self, lit: &'meta syn::LitBool) {
         panic!(
             "luther: {} is not a valid value for luther attrubute option {}",
-            lit.value,
-            self.key
+            lit.value, self.key
         );
     }
 
@@ -349,8 +348,7 @@ impl<'meta> visit::Visit<'meta> for LutherAttrOptionBuilder {
     fn visit_lit_verbatim(&mut self, lit: &'meta syn::LitVerbatim) {
         panic!(
             "luther: {} is not a valid value for luther attrubute option {}",
-            lit.token,
-            self.key
+            lit.token, self.key
         );
     }
 }
