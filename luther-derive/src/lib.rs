@@ -106,6 +106,7 @@
 //! * the value provided for the `regex` option can't be parsed as a regular expression
 //! * the value provided for the `priority_group` option can't be parsed as an integer
 
+extern crate itertools;
 extern crate proc_macro;
 extern crate redfa;
 extern crate syn;
@@ -115,10 +116,12 @@ extern crate quote;
 
 mod enum_info;
 mod generate;
+mod dfa;
 
 use proc_macro::TokenStream;
 use syn::DeriveInput;
-use std::collections::BTreeMap;
+
+type Dfa<'info, 'ast: 'info> = redfa::Dfa<char, Option<&'info enum_info::VariantInfo<'ast>>>;
 
 /// Procedural macro to derive the `luther::Lexer` trait.
 ///
@@ -131,22 +134,9 @@ pub fn luther_derive(input: TokenStream) -> TokenStream {
 
     let info: enum_info::EnumInfo = (&ast).into();
 
-    let dfa = redfa::Dfa {
-        states: vec![
-            redfa::State {
-                by_char: BTreeMap::new(),
-                default: 1,
-                value: None,
-            },
-            redfa::State {
-                by_char: BTreeMap::new(),
-                default: 1,
-                value: None,
-            },
-        ],
-    };
+    let (dfa, error_state) = dfa::build_dfa(&info);
 
-    let expanded = generate::generate_lexer_impl(&info, &dfa, 1);
+    let expanded = generate::generate_lexer_impl(&info, &dfa, error_state);
 
     expanded.into()
 }
