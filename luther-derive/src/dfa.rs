@@ -13,6 +13,21 @@ use super::Dfa;
 use redfa::{self, Regex};
 use itertools;
 
+/// build_dfa builds a Dfa from the information contained in the EnumInfo passed in.
+///
+/// The return type is the Dfa and the index of the error state in that Dfa. The value
+/// attached to each state of the Dfa is an Option<VariantInfo>. It is None for non-accepting
+/// states and Some(vi) for accepting states where vi is the VariantInfo that corresponds
+/// to the variant matched by this state.
+///
+/// If more than one variant can be matched in a given accepting states the one in the lowest
+/// priority group is selected. If more than one variant in the same priority group can be
+/// matched then the tie is broken by preferring simple strings (i.e. without repetition, or
+/// alteration, etc.) over more complicated regular expressions. If there is still a tie then
+/// this is an error.
+///
+/// It is also an error if any of the regular expresions corresponding to one of variants matches
+/// the empty string since this would prevent the generated lexer from making progress.
 pub fn build_dfa<'info, 'ast: 'info>(info: &'info EnumInfo<'ast>) -> (Dfa<'info, 'ast>, usize) {
     // parse the regex for the variants
     let regexs: Result<Vec<Regex<char>>, _> = info.variants
