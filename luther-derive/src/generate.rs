@@ -10,9 +10,9 @@ use syn::{self, Ident};
 use quote;
 use redfa;
 use enum_info;
+use super::Dfa;
 
-type State<'ast> = redfa::State<char, Option<enum_info::VariantInfo<'ast>>>;
-type Dfa<'ast> = redfa::Dfa<char, Option<enum_info::VariantInfo<'ast>>>;
+type State<'info, 'ast: 'info> = redfa::State<char, Option<&'info enum_info::VariantInfo<'ast>>>;
 
 /// Generates a dfa enum, implements `Default` and `luther::dfa::Dfa` for that
 /// enum, and implements `luther::Lexer` for the enum described in `info`.
@@ -24,9 +24,9 @@ type Dfa<'ast> = redfa::Dfa<char, Option<enum_info::VariantInfo<'ast>>>;
 /// Both transition() and accept() are geneated from the `dfa.states` vector.
 /// The default transition() if nothing else is specified in `dfa.states` is
 /// to the error state.
-pub fn generate_lexer_impl<'ast>(
-    info: &'ast enum_info::EnumInfo<'ast>,
-    dfa: &'ast Dfa<'ast>,
+pub fn generate_lexer_impl<'info, 'ast: 'info>(
+    info: &'info enum_info::EnumInfo<'ast>,
+    dfa: &'info Dfa<'info, 'ast>,
     error_state: usize,
 ) -> quote::Tokens {
     let name = info.name;
@@ -129,7 +129,7 @@ fn generate_trasitions_for_state(
         .map(|&i| make_state_path(dfa_name, i as usize));
 
     quote! {
-        #((#from, #label) => #to),*
+        #((#from, #label) => #to,)*
         #default_transition
     }
 }
