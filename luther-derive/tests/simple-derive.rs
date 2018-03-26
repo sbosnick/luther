@@ -13,6 +13,7 @@ extern crate assert_matches;
 enum Token {
     #[luther(regex = "ab")] Ab,
     #[luther(regex = "acc*")] Acc,
+    #[luther(regex = "a(bc|de)")] Abcde(String),
 }
 
 #[derive(Fail, Debug)]
@@ -62,4 +63,15 @@ fn token_lexes_ab() {
     let result = sut.next();
 
     assert_matches!(result, Some(Ok(Token::Ab)));
+}
+
+#[test]
+fn token_lexes_ade() {
+    use luther::Lexer;
+    let input = SpanedStrIter::new("ade");
+
+    let mut sut = Token::lexer(input).map(|r| r.map(|s| s.into_inner().1));
+    let result = sut.next();
+
+    assert_matches!(result, Some(Ok(Token::Abcde(ref s))) if s == "ade");
 }
