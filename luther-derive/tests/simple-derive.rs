@@ -12,7 +12,6 @@ extern crate assert_matches;
 #[derive(Lexer, Debug)]
 enum Token {
     #[luther(regex = "ab")] Ab,
-
     #[luther(regex = "acc*")] Acc,
 }
 
@@ -55,7 +54,6 @@ where
 }
 
 #[test]
-#[ignore]
 fn token_lexes_ab() {
     use luther::Lexer;
     let input = SpanedStrIter::new("ab");
