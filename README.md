@@ -5,8 +5,7 @@
 ---
 ## Usage
 
-Luther is current very much a work in progress. The following is intended to
-be (roughly) how it will work once it is complete.
+Luther is current very much a work in progress. The following roughly how it works:
 
 ```rust
 extern crate luther;
@@ -35,8 +34,7 @@ fn main() {
 ```
 
 The syntax outlined above has a few rough edges that should be smothed out
-before Luther is ready for prime-time. Also, the proc-macro crate will have
-to be implmented.
+before Luther is ready for prime-time.
 
 The intention is for the `tokens` iterator from the above example to be a
 suitable candate for an external lexer for the parser generator [Lalrpop].
