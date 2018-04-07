@@ -40,6 +40,7 @@ extern crate regex;
 mod error;
 mod span;
 pub mod dfa;
+pub mod spanned;
 
 pub use error::{LexError, Result};
 pub use span::{Location, Span};
