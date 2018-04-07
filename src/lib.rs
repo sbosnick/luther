@@ -11,8 +11,7 @@
 //! The motivating case for this crate is a token enum that has the `Lexer` trait implemented on
 //! it. The `lexer` method of this trait will return a token iterator when given a `char` iterator.
 //!
-//! The `Lexer` trait would normally be derived through the (yet to be written) luther-derive
-//! crate.
+//! The `Lexer` trait would normally be derived through the luther-derive crate.
 //!
 //! The input to the `lexer` method is a fallible iterator (i.e. an iterator with a Result item
 //! type) over a `Span` of `char`. The output is a fallible iterator over a `Span` of the token
