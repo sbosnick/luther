@@ -11,8 +11,8 @@ extern crate luther;
 #[macro_use]
 extern crate luther_derive;
 
-#[macro_use]
-extern crate failure;
+use luther::Lexer;
+use luther::spanned::StrExt;
 
 #[derive(Lexer, Debug, PartialEq)]
 enum Token {
@@ -123,49 +123,10 @@ enum Token {
     StringLiteral,
 }
 
-#[derive(Fail, Debug)]
-enum NoError {}
-
-impl std::fmt::Display for NoError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "The impossible has occured.")
-    }
-}
-
-struct SpannedStrIter<I>
-where
-    I: Iterator<Item = (usize, char)>,
-{
-    inner: I,
-}
-
-impl<'a> SpannedStrIter<std::str::CharIndices<'a>> {
-    fn new(input: &'a str) -> Self {
-        SpannedStrIter {
-            inner: input.char_indices(),
-        }
-    }
-}
-
-impl<I> Iterator for SpannedStrIter<I>
-where
-    I: Iterator<Item = (usize, char)>,
-{
-    type Item = Result<luther::Span<char>, NoError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.inner.next() {
-            None => None,
-            Some(i) => Some(Ok(i.into())),
-        }
-    }
-}
-
 #[test]
 fn token_lexes_keywords_punctuation_and_identifiers() {
-    use luther::Lexer;
     use Token::*;
-    let input = SpannedStrIter::new("for foo >>");
+    let input = "for foo >>".spanned_chars();
 
     let sut = Token::lexer(input).map(|r| r.map(|s| s.into_inner().1));
     let results: Result<Vec<_>, _> = sut.collect();

@@ -6,12 +6,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms
 
-#[macro_use]
-extern crate failure;
 extern crate luther;
 
 use std::default;
 use luther::Lexer;
+use luther::spanned::StrExt;
 
 #[derive(Debug, PartialEq)]
 enum Tokens {
@@ -71,47 +70,9 @@ impl luther::Lexer for Tokens {
 
 // End luther-dervie exemplar
 
-#[derive(Fail, Debug)]
-enum NoError {}
-
-impl std::fmt::Display for NoError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "The impossible has occured.")
-    }
-}
-
-struct SpanedStrIter<I>
-where
-    I: Iterator<Item = (usize, char)>,
-{
-    inner: I,
-}
-
-impl<'a> SpanedStrIter<std::str::CharIndices<'a>> {
-    fn new(input: &'a str) -> Self {
-        SpanedStrIter {
-            inner: input.char_indices(),
-        }
-    }
-}
-
-impl<I> Iterator for SpanedStrIter<I>
-where
-    I: Iterator<Item = (usize, char)>,
-{
-    type Item = Result<luther::Span<char>, NoError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.inner.next() {
-            None => None,
-            Some(i) => Some(Ok(i.into())),
-        }
-    }
-}
-
 #[test]
 fn luther_matches_for_tokens_ab_and_accc() {
-    let input = SpanedStrIter::new("abaccc");
+    let input = "abaccc".spanned_chars();
 
     let sut = Tokens::lexer(input).map(|r| r.map(|s| s.into_inner().1));
     let result: Result<Vec<_>, _> = sut.collect();
