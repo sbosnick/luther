@@ -1,7 +1,7 @@
 # Luther
 
 **Luther is an embedded lexer generator for stable Rust.**
-
+[![Build Status](https://travis-ci.org/sbosnick/luther.svg?branch=master)](https://travis-ci.org/sbosnick/luther)
 ---
 ## Usage
 
