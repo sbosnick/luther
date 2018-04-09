@@ -22,6 +22,8 @@
 #[macro_use]
 extern crate failure;
 
+extern crate encode_unicode;
+
 #[cfg(test)]
 #[macro_use]
 extern crate assert_matches;
