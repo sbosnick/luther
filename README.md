@@ -3,6 +3,7 @@
 **Luther is an embedded lexer generator for stable Rust.**
 
 [![Build Status](https://travis-ci.org/sbosnick/luther.svg?branch=master)](https://travis-ci.org/sbosnick/luther)
+[![Coverage Status](https://coveralls.io/repos/github/sbosnick/luther/badge.svg?branch=master)](https://coveralls.io/github/sbosnick/luther?branch=master)
 ---
 ## Usage
 
