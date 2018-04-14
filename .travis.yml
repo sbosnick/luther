@@ -1,3 +1,4 @@
+sudo: required
 language: rust
 cache: cargo
 
@@ -8,6 +9,9 @@ addons:
             - libelf-dev
             - libdw-dev
             - binutils-dev
+            - cmake
+        sources:
+            - kalakris-cmake
 
 rust:
     - stable
