@@ -55,6 +55,17 @@ where
         }
     }
 
+    /// Maps the `Span`'s that are being iterated over to a different type.
+    ///
+    /// This is a convience method to allow mapping the consetive `Span`'s while
+    /// passing the failure values through.
+    pub fn map_span<U, FN>(self, f: FN) -> MapSpan<Self, T, U, F, FN>
+    where
+        FN: FnMut(Span<T>) -> U,
+    {
+        MapSpan { inner: self, f }
+    }
+
     // The Ok return is what is needed to drive the Iterator::next() loop. The Err
     // return is the return type from Iterator::next() when the pre-conditions for
     // loop aren't there.
@@ -130,6 +141,36 @@ where
                 .map(|t| Span::new(start, end, t))
                 .ok_or(LexError::InvalidToken(tok_str)),
         )
+    }
+}
+
+/// An iterator adaptor that maps the `Ok` values and passes the `Err` values on unaltered.
+///
+/// This struct is created by the `map_span` method on `LexerIter`.
+pub struct MapSpan<I, T, U, F, FN>
+where
+    I: Iterator<Item = Result<Span<T>, F>>,
+    F: Fail,
+    FN: FnMut(Span<T>) -> U,
+{
+    inner: I,
+    f: FN,
+}
+
+impl<I, T, U, F, FN> Iterator for MapSpan<I, T, U, F, FN>
+where
+    I: Iterator<Item = Result<Span<T>, F>>,
+    F: Fail,
+    FN: FnMut(Span<T>) -> U,
+{
+    type Item = Result<U, F>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.inner.next() {
+            None => None,
+            Some(Err(e)) => Some(Err(e)),
+            Some(Ok(span)) => Some(Ok((self.f)(span))),
+        }
     }
 }
 
@@ -363,6 +404,24 @@ mod test {
         let result: StdResult<Vec<_>, _> = sut.collect();
 
         assert_matches!(result, Err(LexError::InputError(FakeError::InputError)));
+    }
+
+    #[test]
+    fn lexer_map_spans_to_new_values() {
+        use self::Tokens::*;
+        let input = "abacabccc".char_indices().map(|i| Ok(i.into()));
+
+        let sut = DfaLexer::new(input).map_span(|s| s.into_inner().1);
+        let result: StdResult<Vec<Tokens>, ::LexError<NoFail>> = sut.collect();
+
+        assert_eq!(
+            result.expect("Unexpected error in map_span()."),
+            vec![
+                Token1("ab".to_string()),
+                Token1("ac".to_string()),
+                Token1("abccc".to_string()),
+            ]
+        );
     }
 
     quickcheck! {
