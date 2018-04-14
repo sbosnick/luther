@@ -28,7 +28,7 @@ enum Token {
 fn token_lexes_ab() {
     let input = "ab".spanned_chars();
 
-    let mut sut = Token::lexer(input).map(|r| r.map(|s| s.into_inner().1));
+    let mut sut = Token::lexer(input).map_span(|s| s.into_inner().1);
     let result = sut.next();
 
     assert_matches!(result, Some(Ok(Token::Ab)));
@@ -38,7 +38,7 @@ fn token_lexes_ab() {
 fn token_lexes_ade() {
     let input = "ade".spanned_chars();
 
-    let mut sut = Token::lexer(input).map(|r| r.map(|s| s.into_inner().1));
+    let mut sut = Token::lexer(input).map_span(|s| s.into_inner().1);
     let result = sut.next();
 
     assert_matches!(result, Some(Ok(Token::Abcde(ref s))) if s == "ade");

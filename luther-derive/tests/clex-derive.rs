@@ -128,7 +128,7 @@ fn token_lexes_keywords_punctuation_and_identifiers() {
     use Token::*;
     let input = "for foo >>".spanned_chars();
 
-    let sut = Token::lexer(input).map(|r| r.map(|s| s.into_inner().1));
+    let sut = Token::lexer(input).map_span(|s| s.into_inner().1);
     let results: Result<Vec<_>, _> = sut.collect();
 
     assert_eq!(
