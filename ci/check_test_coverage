@@ -40,10 +40,10 @@ do
 done < <(cargo test --no-run --message-format json | jq --raw-output 'select(.profile.test).filenames[0]')
 
 # Check if this is running on Travis CI and set option to upload to coveralls
-if [[ -z "${TRAVIS}" && ${TRAVIS} == "true" ]]; then 
-    coveralls_id_arg="--coveralls-id=${TRAVIS_JOB_ID}"
-else
+if [[ -z "${TRAVIS}" ]]; then 
     coveralls_id_arg=""
+else
+    coveralls_id_arg="--coveralls-id=${TRAVIS_JOB_ID}"
 fi
 
 # Merge the coverage data and upload to coveralls
