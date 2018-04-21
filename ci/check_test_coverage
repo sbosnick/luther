@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+# Copyright 2018 Steven Bosnick
+#
+# Licensed under the Apache License, Version 2.0 <LICENSE-APACHE-2.0 or
+# http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+# <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+# option. This file may not be copied, modified, or distributed
+# except according to those terms
+
+set -ev
+
+if [[ $# -lt 1 ]]; then
+    cat <<- EOF
+    usage: $0 coverage_dir_base
+
+    coverage_dir_base is the base working directory for kcov
+EOF
+    exit
+fi
+
+coverage_dir="${1}/kcov"
+
+# Clear old coverage data directory
+if [[ -e "${coverage_dir}" ]]; then
+    rm -r "${coverage_dir}"
+fi
+mkdir -p "${coverage_dir}/luther"
+
+# Generate coverage data for test binaries for luther project
+while read test_binary
+do
+    # create directory
+    working_dir="${coverage_dir}/luther/$(basename ${test_binary})"
+    mkdir "${working_dir}"
+
+    # run kcov
+    kcov --include-path=. "${working_dir}" "${test_binary}"
+
+done < <(cargo test --no-run --message-format json | jq --raw-output 'select(.profile.test).filenames[0]')
+
+# Check if this is running on Travis CI and set option to upload to coveralls
+if [[ -z "${TRAVIS}" && ${TRAVIS} == "true" ]]; then 
+    coveralls_id_arg="--coveralls-id=${TRAVIS_JOB_ID}"
+else
+    coveralls_id_arg=""
+fi
+
+# Merge the coverage data and upload to coveralls
+mkdir "${coverage_dir}/merge"
+echo kcov --merge ${coveralls_id_arg} "${coverage_dir}"/merge "${coverage_dir}"/luther/*
+kcov --merge ${coveralls_id_arg} "${coverage_dir}"/merge "${coverage_dir}"/luther/*
