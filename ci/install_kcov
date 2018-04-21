@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+
+# Copyright 2018 Steven Bosnick
+#
+# Licensed under the Apache License, Version 2.0 <LICENSE-APACHE-2.0 or
+# http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+# <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+# option. This file may not be copied, modified, or distributed
+# except according to those terms
+
+set -ev
+
+if [[ $# -lt 2 ]]; then
+    cat <<- EOF
+    usage: $0 kcov_version install_prefix [working_dir_base]
+
+    The default working_dir_base is \$HOME.
+EOF
+    exit
+fi
+
+kcov_slug=SimonKagstrom/kcov
+
+kcov_version=$1
+install_prefix=$2
+working_dir=${3:-$HOME}/${kcov_slug}
+
+# check for ${install_prefix}/bin/kcov and exit early if it exists and its version is ${kcov_version}
+if [[ -x ${install_prefix}/bin/kcov && $(${install_prefix}/bin/kcov --version | cut -f 2 -d ' ') == ${kcov_version} ]]; then
+    exit
+fi
+
+# get and untar the archive
+mkdir -p ${working_dir}
+wget -O - https://github.com/${kcov_slug}/archive/v${kcov_version}.tar.gz | tar --directory=${working_dir} -xz
+
+# cmake
+mkdir -p ${working_dir}/kcov-${kcov_version}/build
+cd ${working_dir}/kcov-${kcov_version}/build
+cmake -DCMAKE_INSTALL_PREFIX=${install_prefix} ..
+
+# make
+make
+
+# make install
+make install

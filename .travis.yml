@@ -1,6 +1,10 @@
 sudo: required
 language: rust
-cache: cargo
+
+cache:
+    cargo: true
+    directories:
+        - $HOME/.local
 
 # packages needed for kcov which is used by "cargo coveralls"
 addons:
@@ -22,10 +26,11 @@ matrix:
     fast_finish: true
 
 before_install:
-    - export PATH=$HOME/.cargo/bin:$PATH
+    - export PATH=$PATH:$HOME/.cargo/bin:$HOME/.local/bin
     - cargo install cargo-update || echo "cargo-update already installed"
     - cargo install cargo-travis || echo "cargo-travis already installed"
     - cargo install-update -a
+    - ci/install_kcov 34 $HOME/.local
 
 install: cargo build --verbose --all
 
