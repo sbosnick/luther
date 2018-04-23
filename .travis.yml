@@ -15,8 +15,6 @@ addons:
             - libdw-dev
             - binutils-dev
             - libiberty-dev
-            # package needed for check_test_coverage
-            - jq
 
 rust:
     - stable
