@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+
+# Copyright 2018 Steven Bosnick
+#
+# Licensed under the Apache License, Version 2.0 <LICENSE-APACHE-2.0 or
+# http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+# <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+# option. This file may not be copied, modified, or distributed
+# except according to those terms
+
+set -e
+shopt -s nullglob
+
+function initialize {
+    base_dir=target/debug
+    test_dir=luther-derive/testsuite
+    out_dir_base="${base_dir}/testsuite"
+    exit_code=0
+}
+
+function check_directories {
+    if ! [[ -d ${base_dir} && -d ${test_dir} ]]; then
+        echo "Unable to locate ${base_dir} and ${test_dir}."
+        echo "$0 should be executed from the base directory of the luther crate."
+        exit 2
+    fi
+}
+
+function set_rustc_args {
+    local dep_dir="${base_dir}/deps"
+    local libluther="${base_dir}/libluther.rlib"
+    local libluther_derive="${base_dir}/libluther_derive.so"
+    rustc_args=(-L "dependency=${dep_dir}"
+               --extern "luther=${libluther}"
+               --extern "luther_derive=${libluther_derive}")
+}
+
+function create_base_build_directory {
+    if [[ -d "${out_dir_base}" ]]; then
+        rm -r "${out_dir_base}"
+    fi
+    mkdir "${out_dir_base}"
+}
+
+function run_tests {
+    set +e
+
+    for file in ${test_dir}/$1*.rs ; do
+        # setup the out_dir
+        local out_dir="${out_dir_base}/$(basename "${file}" .rs)"
+        mkdir "${out_dir}"
+        if [[ $? != 0 ]]; then
+            echo "Unable to create directory ${out_dir}."
+            exit 2
+        fi
+
+        # run rustc
+        rustc "${rustc_args[@]}" --out-dir "${out_dir}" "${file}"
+        local rustc_exit_code=$?
+        if [[ $rustc_exit_code != 0 && $1 == "succ" ]]; then
+            echo Unexpected failure compiling "${file}"
+            exit_code=1
+        elif [[ $rustc_exit_code == 0 && $1 == "fail" ]]; then
+            echo Unexpected sucess compiling "${file}"
+            exit_code=1
+        fi
+    done
+
+    set -e
+}
+
+function main {
+    initialize
+    check_directories
+    set_rustc_args
+    create_base_build_directory
+    run_tests "succ"
+    run_tests "fail" 
+    exit ${exit_code}
+}
+
+main
