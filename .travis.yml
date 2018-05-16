@@ -31,7 +31,9 @@ before_install:
 
 install: cargo build --verbose --all
 
-script: cargo test --verbose --all
+script: 
+    - cargo test --verbose --all
+    - ./luther-derive/testsuite/runtests
 
 after_success:
     - ci/check_test_coverage target

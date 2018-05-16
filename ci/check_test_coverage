@@ -26,6 +26,7 @@ if [[ -e "${coverage_dir}" ]]; then
     rm -r "${coverage_dir}"
 fi
 mkdir -p "${coverage_dir}/luther"
+mkdir "${coverage_dir}/luther_derive"
 
 # Generate coverage data for test binaries for luther project
 while read test_binary
@@ -39,6 +40,9 @@ do
 
 done < <(cargo test --no-run --message-format json | jq --raw-output 'select(.profile.test).filenames[0]')
 
+# Generate coverage data for the luther_derive testsuite
+./luther-derive/testsuite/runtests "${coverage_dir}/luther_derive"
+
 # Check if this is running on Travis CI and set option to upload to coveralls
 if [[ -z "${TRAVIS}" ]]; then 
     coveralls_id_arg=""
@@ -48,5 +52,5 @@ fi
 
 # Merge the coverage data and upload to coveralls
 mkdir "${coverage_dir}/merge"
-echo kcov --merge ${coveralls_id_arg} "${coverage_dir}"/merge "${coverage_dir}"/luther/*
-kcov --merge ${coveralls_id_arg} "${coverage_dir}"/merge "${coverage_dir}"/luther/*
+echo kcov --merge ${coveralls_id_arg} "${coverage_dir}"/merge "${coverage_dir}"/luther/* "${coverage_dir}/luther_derive"
+kcov --merge ${coveralls_id_arg} "${coverage_dir}"/merge "${coverage_dir}"/luther/* "${coverage_dir}/luther_derive"
