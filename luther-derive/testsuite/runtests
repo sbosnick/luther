@@ -8,6 +8,23 @@
 # option. This file may not be copied, modified, or distributed
 # except according to those terms
 
+# Usage: runtests [kcov_base_dir]
+#
+# Runs all of the tests in the test suite and check that the succ*.rs 
+# test succeed and the fail*.rs tests fail. The tests are run by calling
+# rustc with the appropriate arguments on the succ*.rs and fail*.rs files
+# (individually).
+#
+# runtests should be run from the base of the luther project.
+#
+# The kcov_base_dir optional argument provides the outdir argument for
+# kcov. If this argument is provided then runtests will invoke rustc
+# running under kcov. If the argument is not provided then runtests will
+# invoice rustc directly.
+#
+# When runtests is running in the kcov mode it does not comfirm the exit
+# status of rustc.
+
 set -e
 shopt -s nullglob
 
@@ -15,6 +32,7 @@ function initialize {
     base_dir=target/debug
     test_dir=luther-derive/testsuite
     out_dir_base="${base_dir}/testsuite"
+    kcov_base_dir=$1
     exit_code=0
 }
 
@@ -42,41 +60,62 @@ function create_base_build_directory {
     mkdir "${out_dir_base}"
 }
 
-function run_tests {
+function create_kcov_base_dir {
+    if ! [[ -z ${kcov_base_dir} ]]; then
+        if [[ -d ${kcov_base_dir} ]]; then
+            rm -r "${kcov_base_dir}"
+        fi
+        mkdir "${kcov_base_dir}"
+    fi
+}
+
+function check_exit_code {
+    if [[ $1 != 0 && $2 == "succ" ]]; then
+        echo Unexpected failure compiling "${file}"
+        exit_code=1
+    elif [[ $1 == 0 && $2 == "fail" ]]; then
+        echo Unexpected sucess compiling "${file}"
+        exit_code=1
+    fi
+}
+
+function run_one_test {
     set +e
 
-    for file in ${test_dir}/$1*.rs ; do
-        # setup the out_dir
-        local out_dir="${out_dir_base}/$(basename "${file}" .rs)"
-        mkdir "${out_dir}"
-        if [[ $? != 0 ]]; then
-            echo "Unable to create directory ${out_dir}."
-            exit 2
-        fi
+    local out_dir=$1
+    local file=$2
+    local succ_fail=$3
 
-        # run rustc
+    if [[ -z ${kcov_base_dir} ]]; then
         rustc "${rustc_args[@]}" --out-dir "${out_dir}" "${file}"
-        local rustc_exit_code=$?
-        if [[ $rustc_exit_code != 0 && $1 == "succ" ]]; then
-            echo Unexpected failure compiling "${file}"
-            exit_code=1
-        elif [[ $rustc_exit_code == 0 && $1 == "fail" ]]; then
-            echo Unexpected sucess compiling "${file}"
-            exit_code=1
-        fi
-    done
+        check_exit_code $? $succ_fail
+    else
+        kcov --include-path=. "${kcov_base_dir}" rustc "${rustc_args[@]}" --out-dir "${out_dir}" "${file}"
+    fi
 
     set -e
 }
 
+function run_tests {
+    for file in ${test_dir}/$1*.rs ; do
+        # setup the out_dir
+        local out_dir="${out_dir_base}/$(basename "${file}" .rs)"
+        mkdir "${out_dir}"
+
+        # run rustc
+        run_one_test "${out_dir}" "${file}" "$1"
+    done
+}
+
 function main {
-    initialize
+    initialize "$@"
     check_directories
     set_rustc_args
     create_base_build_directory
+    create_kcov_base_dir
     run_tests "succ"
     run_tests "fail" 
     exit ${exit_code}
 }
 
-main
+main "$@"
