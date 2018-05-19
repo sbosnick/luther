@@ -16,6 +16,7 @@ use syn::{self, visit};
 pub struct EnumInfo<'ast> {
     pub name: &'ast syn::Ident,
     pub dfa_name: String,
+    pub vis: &'ast syn::Visibility,
     pub variants: Vec<VariantInfo<'ast>>,
 }
 
@@ -32,7 +33,7 @@ pub struct VariantInfo<'ast> {
 
 impl<'ast> From<&'ast syn::DeriveInput> for EnumInfo<'ast> {
     fn from(input: &'ast syn::DeriveInput) -> Self {
-        let mut builder = EnumInfoBuilder::new(&input.ident);
+        let mut builder = EnumInfoBuilder::new(&input.ident, &input.vis);
         visit::visit_derive_input(&mut builder, input);
 
         let name = builder.name;
@@ -41,6 +42,7 @@ impl<'ast> From<&'ast syn::DeriveInput> for EnumInfo<'ast> {
         EnumInfo {
             name,
             dfa_name,
+            vis: builder.vis,
             variants: builder.variants,
         }
     }
@@ -54,14 +56,16 @@ fn make_dfa_name(name: &syn::Ident) -> String {
 
 struct EnumInfoBuilder<'ast> {
     name: &'ast syn::Ident,
+    vis: &'ast syn::Visibility,
     dfa_name: Option<String>,
     variants: Vec<VariantInfo<'ast>>,
 }
 
 impl<'ast> EnumInfoBuilder<'ast> {
-    fn new(name: &'ast syn::Ident) -> Self {
+    fn new(name: &'ast syn::Ident, vis: &'ast syn::Visibility) -> Self {
         EnumInfoBuilder {
             name,
+            vis,
             dfa_name: None,
             variants: Vec::new(),
         }

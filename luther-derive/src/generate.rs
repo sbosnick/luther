@@ -31,7 +31,7 @@ pub fn generate_lexer_impl<'info, 'ast: 'info>(
 ) -> quote::Tokens {
     let name = info.name;
     let dfa_name = Ident::from(&info.dfa_name as &str);
-    let dfa_enum = generate_dfa_enum(dfa_name, dfa.states.len());
+    let dfa_enum = generate_dfa_enum(dfa_name, info.vis.clone(), dfa.states.len());
     let dfa_default = generate_dfa_default(dfa_name);
     let is_error_fn = generate_is_error_fn(dfa_name, error_state);
     let transition_fn = generate_transition_fn(dfa, dfa_name, error_state);
@@ -56,12 +56,12 @@ pub fn generate_lexer_impl<'info, 'ast: 'info>(
     }
 }
 
-fn generate_dfa_enum(dfa_name: Ident, num_states: usize) -> quote::Tokens {
+fn generate_dfa_enum(dfa_name: Ident, vis: syn::Visibility, num_states: usize) -> quote::Tokens {
     let state_name = (0..num_states).map(make_state_name);
 
     quote! {
         #[derive(PartialEq, Debug, Clone, Copy)]
-        enum #dfa_name {
+        #vis enum #dfa_name {
             #(#state_name),*
         }
     }
