@@ -11,7 +11,7 @@ use std::cmp::Ordering;
 use enum_info::{EnumInfo, VariantInfo};
 use super::Dfa;
 use redfa::{self, Regex};
-use itertools;
+use redfa::dfa::Normalize;
 
 /// build_dfa builds a Dfa from the information contained in the EnumInfo passed in.
 ///
@@ -34,7 +34,9 @@ pub fn build_dfa<'info, 'ast: 'info>(info: &'info EnumInfo<'ast>) -> (Dfa<'info,
         .iter()
         .map(|vi| vi.regex.parse().or_else(|e| Err((&vi.regex, e))))
         .collect();
-    let regexs = regexs.unwrap_or_else(|(re, e)| panic!("luther: invalid regex \"{}\":{}", re, e));
+    let regexs = regexs
+        .unwrap_or_else(|(re, e)| panic!("luther: invalid regex \"{}\":{}", re, e))
+        .normalize();
 
     // check for nullable regex
     match regexs
@@ -46,6 +48,9 @@ pub fn build_dfa<'info, 'ast: 'info>(info: &'info EnumInfo<'ast>) -> (Dfa<'info,
         _ => {}
     }
 
+    // find all the simple strings
+    let simple_strings: Vec<_> = regexs.iter().map(|re| is_simple_string(re)).collect();
+
     // create the error state
     let error = vec![Regex::Null; regexs.len()];
 
@@ -56,7 +61,9 @@ pub fn build_dfa<'info, 'ast: 'info>(info: &'info EnumInfo<'ast>) -> (Dfa<'info,
     let error_state = map[&error] as usize;
 
     // map the states to accepting states
-    let dfa = dfa.map(|re| map_accepting_state(re.as_ref(), info.variants.as_ref()));
+    let dfa = dfa.map(|re| {
+        map_accepting_state(re.as_ref(), info.variants.as_ref(), simple_strings.as_ref())
+    });
 
     (dfa, error_state)
 }
@@ -64,21 +71,23 @@ pub fn build_dfa<'info, 'ast: 'info>(info: &'info EnumInfo<'ast>) -> (Dfa<'info,
 fn map_accepting_state<'re, 'info, 'ast: 'info>(
     regexs: &'re Vec<Regex<char>>,
     vis: &'info Vec<VariantInfo<'ast>>,
+    simple: &'re Vec<bool>,
 ) -> Option<&'info VariantInfo<'ast>> {
-    let min = itertools::zip(regexs, vis).fold(RegexAccumulator::new(), RegexAccumulator::combine);
+    let min = izip!(regexs, vis, simple).fold(RegexAccumulator::new(), RegexAccumulator::combine);
 
     if min.count > 1 {
-        let (_, vi) = min.regex_vi.unwrap();
+        let (_, vi, _) = min.regex_vi.unwrap();
         panic!(
             "luther: accepting state matches more than one regex including \"{}\"",
             vi.regex
         );
     }
 
-    min.regex_vi.map(|(_, vi)| vi)
+    min.regex_vi.map(|(_, vi, _)| vi)
 }
 
-type RegexVariant<'re, 'info, 'ast: 'info> = (&'re Regex<char>, &'info VariantInfo<'ast>);
+type RegexVariant<'re, 'info, 'ast: 'info> =
+    (&'re Regex<char>, &'info VariantInfo<'ast>, &'re bool);
 
 struct RegexAccumulator<'re, 'info, 'ast: 'info> {
     regex_vi: Option<RegexVariant<'re, 'info, 'ast>>,
@@ -94,11 +103,11 @@ impl<'re, 'info, 'ast: 'info> RegexAccumulator<'re, 'info, 'ast> {
     }
 
     fn combine(self, new: RegexVariant<'re, 'info, 'ast>) -> Self {
-        let (regex, _) = new;
+        let (regex, _, _) = new;
         if regex.nullable() {
-            let (regex_vi, count) = self.regex_vi.map_or((new, 0), |old| {
+            let (regex_vi, count) = self.regex_vi.map_or((new, 1), |old| {
                 match compare_by_priority_group(new, old) {
-                    Ordering::Less => (new, 0),
+                    Ordering::Less => (new, 1),
                     Ordering::Equal => (old, self.count + 1),
                     Ordering::Greater => (old, self.count),
                 }
@@ -113,17 +122,20 @@ impl<'re, 'info, 'ast: 'info> RegexAccumulator<'re, 'info, 'ast> {
     }
 }
 
-fn compare_by_priority_group((l_re, l_vi): RegexVariant, (r_re, r_vi): RegexVariant) -> Ordering {
+fn compare_by_priority_group(
+    (_, l_vi, l_simple): RegexVariant,
+    (_, r_vi, r_simple): RegexVariant,
+) -> Ordering {
     match l_vi.priority_group.cmp(&r_vi.priority_group) {
-        Ordering::Equal => compare_for_simple_string(l_re, r_re),
+        Ordering::Equal => compare_for_simple_string(l_simple, r_simple),
         ord => ord,
     }
 }
 
-fn compare_for_simple_string(lhs: &Regex<char>, rhs: &Regex<char>) -> Ordering {
-    match (is_simple_string(lhs), is_simple_string(rhs)) {
-        (true, false) => Ordering::Less,
-        (false, true) => Ordering::Greater,
+fn compare_for_simple_string(lhs: &bool, rhs: &bool) -> Ordering {
+    match (lhs, rhs) {
+        (&true, &false) => Ordering::Less,
+        (&false, &true) => Ordering::Greater,
         _ => Ordering::Equal,
     }
 }

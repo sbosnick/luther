@@ -106,13 +106,15 @@
 //! * the value provided for the `regex` option can't be parsed as a regular expression
 //! * the value provided for the `priority_group` option can't be parsed as an integer
 
-extern crate itertools;
 extern crate proc_macro;
 extern crate redfa;
 extern crate syn;
 
 #[macro_use]
 extern crate quote;
+
+#[macro_use]
+extern crate itertools;
 
 mod enum_info;
 mod generate;
