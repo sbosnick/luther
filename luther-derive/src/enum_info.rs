@@ -239,7 +239,7 @@ impl<'meta> visit::Visit<'meta> for LutherAttrBuilder {
 
     fn visit_meta_name_value(&mut self, i: &'meta syn::MetaNameValue) {
         if !self.nested {
-            return;
+            panic!("luther: unrecognized form of luther attribute (meta_name_value)");
         }
 
         let mut option = LutherAttrOptionBuilder::new(i.ident.as_ref().into());
