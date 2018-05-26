@@ -68,7 +68,7 @@ impl<'ast> EnumInfoBuilder<'ast> {
             vis,
             dfa_name: None,
             variants: Vec::new(),
-        }
+        } // COV_EXCL_LINE
     }
 }
 
@@ -112,7 +112,7 @@ impl<'ast> visit::Visit<'ast> for EnumInfoBuilder<'ast> {
                 .priority_group
                 .map_or(0, |s| convert_priority_group(s)),
             field: builder.field,
-        };
+        }; // COV_EXCL_LINE
 
         self.variants.push(info);
     }

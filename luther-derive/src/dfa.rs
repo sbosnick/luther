@@ -111,7 +111,7 @@ impl<'re, 'info, 'ast: 'info> RegexAccumulator<'re, 'info, 'ast> {
                     Ordering::Equal => (old, self.count + 1),
                     Ordering::Greater => (old, self.count),
                 }
-            });
+            }); // COV_EXCL_LINE
             RegexAccumulator {
                 regex_vi: Some(regex_vi),
                 count,
