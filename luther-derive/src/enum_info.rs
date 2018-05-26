@@ -83,7 +83,7 @@ impl<'ast> visit::Visit<'ast> for EnumInfoBuilder<'ast> {
 
     fn visit_attribute(&mut self, i: &'ast syn::Attribute) {
         if !is_luther_path(&i.path) {
-            return;
+            return; // COV_EXCL_LINE
         }
 
         match i.interpret_meta() {
@@ -127,7 +127,7 @@ fn is_luther_path(path: &syn::Path) -> bool {
     !path.global() && path.segments.len() == 1 && if let Some(pair) = path.segments.first() {
         pair.value().ident == "luther"
     } else {
-        false
+        false // COV_EXCL_LINE
     }
 }
 
@@ -167,7 +167,7 @@ impl<'ast> VariantInfoBuilder<'ast> {
 impl<'ast> visit::Visit<'ast> for VariantInfoBuilder<'ast> {
     fn visit_attribute(&mut self, i: &'ast syn::Attribute) {
         if !is_luther_path(&i.path) {
-            return;
+            return; // COV_EXCL_LINE
         }
 
         match i.interpret_meta() {
