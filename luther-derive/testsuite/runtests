@@ -90,7 +90,7 @@ function run_one_test {
         rustc "${rustc_args[@]}" --out-dir "${out_dir}" "${file}"
         check_exit_code $? $succ_fail
     else
-        kcov --include-path=. --exclude-line="COV_EXCL_LINE" "${kcov_base_dir}" rustc "${rustc_args[@]}" --out-dir "${out_dir}" "${file}"
+        kcov --include-path=. --exclude-line=COV_EXCL_LINE --exclude-region=COV_EXCL_START:COV_EXCL_END "${kcov_base_dir}" rustc "${rustc_args[@]}" --out-dir "${out_dir}" "${file}"
     fi
 
     set -e

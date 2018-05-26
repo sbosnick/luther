@@ -77,9 +77,10 @@ impl<'ast> visit::Visit<'ast> for EnumInfoBuilder<'ast> {
         panic!("lunther: #[derive(Lexer)] not valid on a struct.");
     }
 
+    // COV_EXCL_START
     fn visit_data_union(&mut self, _: &'ast syn::DataUnion) {
         panic!("lunther: #[derive(Lexer)] not valid on a union.");
-    }
+    } // COV_EXCL_END
 
     fn visit_attribute(&mut self, i: &'ast syn::Attribute) {
         if !is_luther_path(&i.path) {
@@ -229,7 +230,7 @@ impl<'meta> visit::Visit<'meta> for LutherAttrBuilder {
 
     fn visit_nested_meta(&mut self, meta: &'meta syn::NestedMeta) {
         if self.nested {
-            panic!("luther: unregcognized form of luther attribute (nested_meta)");
+            panic!("luther: unregcognized form of luther attribute (nested_meta)"); // COV_EXCL_LINE
         }
 
         self.nested = true;
