@@ -36,7 +36,7 @@ do
     mkdir "${working_dir}"
 
     # run kcov
-    kcov --include-path=. "${working_dir}" "${test_binary}"
+    kcov --include-path=. --exclude-line=COV_EXCL_LINE --exclude-region=COV_EXCL_START:COV_EXCL_END "${working_dir}" "${test_binary}"
 
 done < <(cargo test --no-run --message-format json | jq --raw-output 'select(.profile.test).filenames[0]')
 
@@ -52,5 +52,5 @@ fi
 
 # Merge the coverage data and upload to coveralls
 mkdir "${coverage_dir}/merge"
-echo kcov --merge ${coveralls_id_arg} "${coverage_dir}"/merge "${coverage_dir}"/luther/* "${coverage_dir}/luther_derive"
-kcov --merge ${coveralls_id_arg} "${coverage_dir}"/merge "${coverage_dir}"/luther/* "${coverage_dir}/luther_derive"
+echo kcov --merge ${coveralls_id_arg} --exclude-line=COV_EXCL_LINE --exclude-region=COV_EXCL_START:COV_EXCL_END "${coverage_dir}"/merge "${coverage_dir}"/luther/* "${coverage_dir}/luther_derive"
+kcov --merge ${coveralls_id_arg} --exclude-line=COV_EXCL_LINE --exclude-region=COV_EXCL_START:COV_EXCL_END "${coverage_dir}"/merge "${coverage_dir}"/luther/* "${coverage_dir}/luther_derive"
