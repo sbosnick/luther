@@ -15,5 +15,5 @@ extern crate luther_derive;
 
 #[derive(Lexer, Debug)]
 pub enum Token {
-    #[luther(regex = 1.01e10f64)] Ab,
+    #[luther(regex = "**+")] Ab,
 }
