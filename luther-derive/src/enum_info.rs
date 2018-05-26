@@ -280,7 +280,7 @@ impl fmt::Display for LutherAttrOption {
         let s = match self {
             &Dfa => "dfa",
             &Regex => "regex",
-            &PriorityGroup => "priority_group",
+            &PriorityGroup => "priority_group", // COV_EXCL_LINE
         };
 
         f.write_str(s)
