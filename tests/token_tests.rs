@@ -59,7 +59,7 @@ impl luther::dfa::Dfa<Tokens> for TokensDfa {
         match *self {
             State3 => Some(Tokens::Ab),
             State4 => Some(Tokens::Acc(matched.parse().unwrap_or_default())),
-            _ => None,
+            _ => None, // COV_EXCL_LINE
         }
     }
 }

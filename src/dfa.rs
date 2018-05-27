@@ -424,6 +424,7 @@ mod test {
         );
     }
 
+    // COV_EXCL_START
     quickcheck! {
         fn prop_lexer_matches_regex(input: Vec<StdResult<char,FakeError>>) -> bool {
             use LexError::*;
@@ -444,4 +445,5 @@ mod test {
             }
         }
     }
+    // COV_EXCL_END
 }
