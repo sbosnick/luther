@@ -4,12 +4,15 @@ version = "0.1.0"
 authors = ["Steven Bosnick <sbosnick@sympatico.ca>"]
 description = "The proc macro generator for the Luther lexer generator."
 repository = "https://github.com/sbosnick/luther"
+readme = "README.md"
 categories = ["development-tools", "parsing", "parser-implementation"]
 keywords = ["lex", "lexer", "generator", "dfa", "tokenizer"]
 license = "Apache-2.0/MIT"
 
 [badges]
 travis-ci = { repository = "sbosnick/luther" }
+coveralls = { repository = "sbosnick/luther" }
+maintenance = { status = "actively-developed" }
 
 [lib]
 proc-macro = true

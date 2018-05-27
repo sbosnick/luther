@@ -38,9 +38,13 @@ fn main() {
 The syntax outlined above has a few rough edges that should be smothed out
 before Luther is ready for prime-time.
 
+The procedural macro implementation that provdes the `#[derive(Lexer)]` and
+recognized the `#[luther(...)]` attributes is in the [luther-derive] crate.
+
 The intention is for the `tokens` iterator from the above example to be a
 suitable candate for an external lexer for the parser generator [Lalrpop].
 
+[luther-derive]:https://crates.io/crates/luther-derive
 [Lalrpop]:https://crates.io/crates/lalrpop
 
 ## License
