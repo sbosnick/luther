@@ -169,7 +169,7 @@ where
         Some(Err(e)) => Err(e),
         Some(Ok(byte)) => Ok(byte),
     }
-}
+} // COV_EXCL_LINE
 
 /// Extention trait for a reader to allow it to prodcue a spanned `char`s iterator.
 ///
