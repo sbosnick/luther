@@ -280,7 +280,7 @@ mod test {
         }
     }
 
-    #[derive(Debug, Fail)]
+    #[derive(Debug, Fail)] // COV_EXCL_LINE
     #[fail(display = "The impossible has happend: NoFail has failed.")]
     struct NoFail {}
 

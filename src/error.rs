@@ -9,6 +9,7 @@
 use std::result;
 use failure::Fail;
 
+// COV_EXCL_START
 /// The error type for the lexers produced by Lexer implementations.
 #[derive(Debug, Fail)]
 pub enum LexError<F: Fail> {
@@ -27,6 +28,7 @@ pub enum LexError<F: Fail> {
     #[fail(display = "The lexer encountered an input error.")]
     InputError(#[cause] F),
 }
+// COV_EXCL_END
 
 impl<F: Fail> From<F> for LexError<F> {
     fn from(f: F) -> LexError<F> {

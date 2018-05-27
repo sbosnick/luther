@@ -17,7 +17,7 @@ use std::io::prelude::*;
 ///
 /// This type is used as the error type in a `Result<T,E>` when no errors
 /// are possible.
-#[derive(Fail, Debug)]
+#[derive(Fail, Debug)] // COV_EXCL_LINE
 pub enum Never {}
 
 impl fmt::Display for Never {
