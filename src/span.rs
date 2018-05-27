@@ -130,7 +130,7 @@ mod test {
     #[should_panic]
     fn location_add_overflow_panics() {
         Location::new(usize::max_value()) + 3;
-    }
+    } // COV_EXCL_LINE
 
     #[test]
     fn span_from_usize_char_gives_expected_result_for_euro_sign() {
