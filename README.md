@@ -4,6 +4,8 @@
 
 [![Build Status](https://travis-ci.org/sbosnick/luther.svg?branch=master)](https://travis-ci.org/sbosnick/luther)
 [![Coverage Status](https://coveralls.io/repos/github/sbosnick/luther/badge.svg?branch=master)](https://coveralls.io/github/sbosnick/luther?branch=master)
+[![Latest Version](https://img.shields.io/crates/v/luther.svg)](https://crates.io/crates/luther)
+[![Rust documentation](https://img.shields.io/badge/api-rustdoc-blue.svg)](https://docs.rs/luther/0.1.0/luther/)
 ---
 ## Usage
 
