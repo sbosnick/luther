@@ -1,11 +1,11 @@
 [package]
 name = "luther"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Steven Bosnick <sbosnick@sympatico.ca>"]
 description = "The runtime components of the Luther lexer generator."
 repository = "https://github.com/sbosnick/luther"
 readme = "README.md"
-categories = ["development-tools", "parsing", "parser-implementation"]
+categories = ["development-tools", "parsing", "parser-implementations"]
 keywords = ["lex", "lexer", "generator", "dfa", "tokenizer"]
 license = "Apache-2.0/MIT"
 
