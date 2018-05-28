@@ -27,6 +27,6 @@ version = "0.12"
 features = ["visit"]
 
 [dev-dependencies]
-luther = {path = ".."}
+luther = {version = "0.1.0", path = ".."}
 assert_matches = "1.1.0"
 failure = "0.1.1"
