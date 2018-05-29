@@ -25,4 +25,4 @@ lazy_static = "1.0.0"
 regex = "0.2.5"
 
 [workspace]
-members = ["luther-derive"]
+members = ["luther-derive", "tools/testsuite"]

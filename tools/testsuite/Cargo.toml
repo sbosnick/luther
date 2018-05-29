@@ -1,0 +1,8 @@
+[package]
+name = "testsuite"
+version = "0.1.0"
+authors = ["Steven Bosnick <sbosnick@sympatico.ca>"]
+publish = false
+
+[dependencies]
+quicli = "0.2"
