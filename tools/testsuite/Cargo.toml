@@ -6,3 +6,4 @@ publish = false
 
 [dependencies]
 quicli = "0.2"
+itertools = "0.7"
