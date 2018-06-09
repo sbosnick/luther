@@ -41,7 +41,7 @@ do
 done < <(cargo test --no-run --message-format json | jq --raw-output 'select(.profile.test).filenames[0]')
 
 # Generate coverage data for the luther_derive testsuite
-./luther-derive/testsuite/runtests "${coverage_dir}/luther_derive"
+cargo testsuite -vv --kcov-out="${coverage_dir}/luther_derive"
 
 # Check if this is running on Travis CI and set option to upload to coveralls
 if [[ -z "${TRAVIS}" ]]; then 

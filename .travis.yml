@@ -33,7 +33,7 @@ install: cargo build --verbose --all
 
 script: 
     - cargo test --verbose --all
-    - ./luther-derive/testsuite/runtests
+    - cargo testsuite -vv
 
 after_success:
     - ci/check_test_coverage target
