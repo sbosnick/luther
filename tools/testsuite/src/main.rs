@@ -16,6 +16,7 @@ mod project;
 mod runner;
 
 use std::path::{Path, PathBuf};
+use std::fs as stdfs;
 use quicli::prelude::*;
 use quicli::fs;
 use runner::Outcome;
@@ -41,11 +42,25 @@ impl Cli {
     fn kcov_out_dir(&self) -> Option<&Path> {
         self.kcov_out.as_ref().map(|path| path.as_ref())
     }
+
+    fn ensure_kcov_out_dir(&self) -> Result<()> {
+        if let Some(path) = self.kcov_out_dir() {
+            if path.is_dir() {
+                debug!("deleting existing kcov-out dir: {}", path.display());
+                stdfs::remove_dir_all(path)?;
+            }
+            debug!("creating new kcov-out dir: {}", path.display());
+            stdfs::create_dir_all(path)?;
+        }
+        Ok(())
+    }
 }
 
 main!(|args: Cli, log_level: verbosity| {
+    trace!("Cli: {:?}", args);
     let proj = project::Project::new();
     proj.ensure_dirs()?;
+    args.ensure_kcov_out_dir()?;
     let runner = runner::Runner::new(args.kcov_out_dir(), &proj);
 
     if let Some(test_name) = args.test_name.as_ref() {

@@ -6,8 +6,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms
 
+use std::env;
+use std::ffi::OsStr;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::{self, Output};
 use args;
 use project;
 use quicli::prelude::*;
@@ -76,8 +78,6 @@ impl<'proj> Runner<'proj> {
             .arg(out_dir)
             .arg(test_file);
 
-        debug!("running: {:?}", command);
-
         let output = command.output()?;
 
         if output.status.success() == expect_success {
@@ -111,4 +111,41 @@ fn log_output(output: &Output, level: Level) {
 pub enum Outcome {
     Pass,
     Fail,
+}
+
+struct Command(process::Command, String);
+
+impl Command {
+    fn new<S: AsRef<OsStr>>(program: S) -> Command {
+        let name = program.as_ref().to_string_lossy().into_owned();
+
+        Command(process::Command::new(program), name)
+    }
+
+    fn arg<S: AsRef<OsStr>>(&mut self, arg: S) -> &mut Self {
+        self.0.arg(arg);
+        self
+    }
+
+    fn args<I, S>(&mut self, args: I) -> &mut Self
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        self.0.args(args);
+        self
+    }
+
+    fn output(&mut self) -> Result<Output> {
+        debug!("running: {:?}", self.0);
+        trace!("PATH is: {:?}", env::var("PATH"));
+
+        let output = self.0
+            .output()
+            .context(format!("Failure executing command: {}", self.1))?;
+
+        trace!("output: {:?}", output);
+
+        Ok(output)
+    }
 }
