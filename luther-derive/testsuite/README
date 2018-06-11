@@ -1,4 +1,4 @@
-All of the .rs files in this directory are intented to be stand alone
+All of the .rs files in this directory are intended to be stand alone
 test files that can be complied (or not) by rustc. The test files
 should rely on the extern crates luther and luther_derive, but not
 any other crates. There is no expectation that the output of
@@ -10,8 +10,9 @@ The invocation of rustc will be something like:
     rusc -L dependency=... -extern luther=... --extern luther_derive=... file.rs
 
 By convention compilation of files named succ*.rs are expected to succeed and 
-compliation of fles name fail*.rs are expected to fail.
+compilation of files name fail*.rs are expected to fail.
 
-The script "runtests" will (as it name suggests) run the tests. It is designed
-to be run in root of the project (i.e. the root of the 'luther' crate, not the
-'luther-derive' crate.
+The testsuite cargo alias will run the testsuite tool (in the tools/testsuite crate)
+which will in turn run all of the tests. Invoke the alias as follows:
+
+    cargo testsuite
