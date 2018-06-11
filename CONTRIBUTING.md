@@ -86,5 +86,5 @@ be improved greatly if there were a means to make such reports.
 If someone who has had experience dealing with a Contributor Code of Conduct was
 willing to act as the person to whom such reports could be directed then that
 would be a very welcome contribution to the project. Please email the project
-leader directly at "sbosnick <at> sympatico <dot> ca" if you are interested
+leader directly at "sbosnick at sympatico dot ca" if you are interested
 in contributing in this manner.
