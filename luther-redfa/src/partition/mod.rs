@@ -218,7 +218,7 @@ where
 {
     left: Peekable<L>,
     right: Peekable<R>,
-    last_vals: Option<(bool, bool)>,
+    last_vals: last_values::UnionLastVals,
 }
 
 impl<'a, U: 'a, L, R> UnionIntervalIter<'a, U, L, R>
@@ -230,76 +230,8 @@ where
         UnionIntervalIter {
             left: left.peekable(),
             right: right.peekable(),
-            last_vals: None,
+            last_vals: last_values::UnionLastVals::new(),
         }
-    }
-
-    fn set_both_last_vals(&mut self, left: bool, right: bool) {
-        self.last_vals = Some((left, right));
-    }
-
-    fn set_left_last_val(&mut self, left: bool) {
-        let (_, right) = self.last_vals
-            .expect("set_left_last_val() called before set_both_last_vals()");
-        self.last_vals = Some((left, right));
-    }
-
-    fn set_right_last_val(&mut self, right: bool) {
-        let (left, _) = self.last_vals
-            .expect("set_right_last_val() called before set_both_last_vals()");
-        self.last_vals = Some((left, right));
-    }
-
-    fn set_none_last_vals(&mut self) {
-        self.last_vals = None;
-    }
-
-    fn next_left_value(&mut self, value: bool) -> Option<bool> {
-        let result = self.last_vals.map_or(Some(value), |(left, right)| {
-            if !(left || right) && value {
-                Some(value)
-            } else if !right && !value {
-                Some(value)
-            } else {
-                None
-            }
-        });
-
-        self.set_left_last_val(value);
-        result
-    }
-
-    fn next_right_value(&mut self, value: bool) -> Option<bool> {
-        let result = self.last_vals.map_or(Some(value), |(left, right)| {
-            if !(left || right) && value {
-                Some(value)
-            } else if !left && !value {
-                Some(value)
-            } else {
-                None
-            }
-        });
-
-        self.set_right_last_val(value);
-        result
-    }
-
-    fn next_both_value(&mut self, newleft: bool, newright: bool) -> Option<bool> {
-        let result = self.last_vals
-            .map_or(Some(newleft || newright), |(left, right)| {
-                if !(left || right) && (newleft || newright) {
-                    Some(newleft || newright)
-                } else if !left && !newright {
-                    Some(newright)
-                } else if !right && !newleft {
-                    Some(newleft)
-                } else {
-                    None
-                }
-            });
-
-        self.set_both_last_vals(newleft, newright);
-        result
     }
 }
 
@@ -326,28 +258,28 @@ where
         while value.is_none() {
             let (k, v, adv) = match (self.left.peek(), self.right.peek()) {
                 (Some(&(ul, vl)), Some(&(ur, _))) if ul < ur => {
-                    let next_val = self.next_left_value(*vl);
+                    let next_val = self.last_vals.next_value(Some(*vl), None);
                     (Some(ul.clone()), next_val, Adv::Left)
                 }
                 (Some(&(ul, _)), Some(&(ur, vr))) if ul > ur => {
-                    let next_val = self.next_right_value(*vr);
+                    let next_val = self.last_vals.next_value(None, Some(*vr));
                     (Some(ur.clone()), next_val, Adv::Right)
                 }
                 (Some(&(ul, vl)), Some(&(_ur, vr))) => {
                     // ul == ur
-                    let next_val = self.next_both_value(*vl, *vr);
+                    let next_val = self.last_vals.next_value(Some(*vl), Some(*vr));
                     (Some(ul.clone()), next_val, Adv::Both)
                 }
                 (Some(&(ul, vl)), None) => {
-                    let next_val = self.next_left_value(*vl);
+                    let next_val = self.last_vals.next_value(Some(*vl), None);
                     (Some(ul.clone()), next_val, Adv::Left)
                 }
                 (None, Some(&(ur, vr))) => {
-                    let next_val = self.next_right_value(*vr);
+                    let next_val = self.last_vals.next_value(None, Some(*vr));
                     (Some(ur.clone()), next_val, Adv::Right)
                 }
                 (None, None) => {
-                    self.set_none_last_vals();
+                    self.last_vals.next_value(None, None);
                     (None, None, Adv::None)
                 }
             };
@@ -378,6 +310,8 @@ where
         }
     }
 }
+
+mod last_values;
 
 #[cfg(test)]
 mod test {
