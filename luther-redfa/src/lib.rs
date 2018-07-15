@@ -17,3 +17,16 @@
 //! [luther-derive]: https://crates.io/crates/luther-derive
 
 #![deny(missing_docs)]
+
+#[cfg(test)]
+#[macro_use]
+extern crate proptest;
+
+#[cfg(test)]
+#[macro_use]
+extern crate assert_matches;
+
+pub mod alphabet;
+
+mod partition;
+mod range;

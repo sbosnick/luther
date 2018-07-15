@@ -15,3 +15,7 @@ coveralls = { repository = "sbosnick/luther" }
 maintenance = { status = "actively-developed" }
 
 [dependencies]
+
+[dev-dependencies]
+proptest = "0.7"
+assert_matches = "1.3"
