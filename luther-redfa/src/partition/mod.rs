@@ -10,8 +10,8 @@ use std::collections::{BTreeMap, Bound};
 use std::fmt::Debug;
 use std::iter::Peekable;
 
-use range::RangeArgument;
 use alphabet::Alphabet;
+use range::RangeArgument;
 
 /// A `PartitionMap` is an effecient map from all elements of `U` to a value
 /// from `V`.
@@ -84,8 +84,7 @@ where
         }
 
         assert_ne!(
-            in_value,
-            out_value,
+            in_value, out_value,
             "in_value and out_value cannot be the same in PartionMap::new()"
         );
 
@@ -129,8 +128,7 @@ where
 
             let (l, r) = f(value.clone());
             assert_ne!(
-                l,
-                r,
+                l, r,
                 "Function passed to PartionMap::split() produced identical values."
             );
 
@@ -411,8 +409,8 @@ mod test {
 
     #[test]
     fn included_both_bounded_range_partition_map_includes_three_values() {
-        use std::collections::Bound::*;
         use self::TestAlpha::*;
+        use std::collections::Bound::*;
 
         let pm = TestPM::new((Included(B), Included(C)), true, false);
 
@@ -424,8 +422,8 @@ mod test {
 
     #[test]
     fn excluded_lower_bounded_range_partition_map_includes_two_values() {
-        use std::collections::Bound::*;
         use self::TestAlpha::*;
+        use std::collections::Bound::*;
 
         let pm = TestPM::new((Excluded(C), Unbounded), true, false);
 
@@ -436,8 +434,8 @@ mod test {
 
     #[test]
     fn excluded_lower_include_upper_bounded_range_partition_map_includes_three_values() {
-        use std::collections::Bound::*;
         use self::TestAlpha::*;
+        use std::collections::Bound::*;
 
         let pm = TestPM::new((Excluded(B), Included(D)), true, false);
 
@@ -449,8 +447,8 @@ mod test {
 
     #[test]
     fn excluded_both_bounded_range_partition_map_includes_three_values() {
-        use std::collections::Bound::*;
         use self::TestAlpha::*;
+        use std::collections::Bound::*;
 
         let pm = TestPM::new((Excluded(B), Excluded(D)), true, false);
 
@@ -463,8 +461,8 @@ mod test {
     #[test]
     #[should_panic]
     fn lower_bound_greater_than_upper_bound_panics() {
-        use std::collections::Bound::*;
         use self::TestAlpha::*;
+        use std::collections::Bound::*;
 
         TestPM::new((Included(C), Excluded(B)), true, false);
     }
@@ -472,8 +470,8 @@ mod test {
     #[test]
     #[should_panic]
     fn lower_exclusive_bound_equal_upper_exlusive_bound_panics() {
-        use std::collections::Bound::*;
         use self::TestAlpha::*;
+        use std::collections::Bound::*;
 
         TestPM::new((Excluded(C), Excluded(C)), true, false);
     }
@@ -489,6 +487,19 @@ mod test {
         assert!(pm.get(&C));
         assert!(!pm.get(&D));
         assert!(!pm.get(&E));
+    }
+
+    #[test]
+    fn partion_map_min_lower_bound_gets_all_true() {
+        use self::TestAlpha::*;
+
+        let pm = TestPM::new(A.., true, false);
+
+        assert!(pm.get(&A));
+        assert!(pm.get(&B));
+        assert!(pm.get(&C));
+        assert!(pm.get(&D));
+        assert!(pm.get(&E));
     }
 
     #[test]
@@ -525,6 +536,19 @@ mod test {
         use self::TestAlpha::*;
         let left = vec![(&A, &true), (&B, &false)].into_iter();
         let right = vec![(&A, &true), (&C, &false)].into_iter();
+
+        let mut sut = UnionIntervalIter::new(left, right.into_iter());
+        sut.next();
+        let result = sut.next();
+
+        assert_matches!(result, Some((C, false)));
+    }
+
+    #[test]
+    fn union_interval_iter_pairwise_has_sticky_true() {
+        use self::TestAlpha::*;
+        let left = vec![(&A, &true), (&B, &false), (&C, &false)].into_iter();
+        let right = vec![(&A, &true), (&B, &true), (&C, &false)].into_iter();
 
         let mut sut = UnionIntervalIter::new(left, right.into_iter());
         sut.next();
