@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+xs 3503001698 877230102 300127886 2607990617 # shrinks to pm = PartitionMap { map: {0: true} }, ops = [Split(1), Union((Unbounded, Unbounded))]

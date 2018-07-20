@@ -32,7 +32,7 @@ use range::RangeArgument;
 /// `Arc`).
 ///
 /// [Lai]: http://hdl.handle.net/1721.1/45638
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PartitionMap<U, V> {
     map: BTreeMap<U, V>,
 }
@@ -237,7 +237,7 @@ impl<'a, U: 'a, L, R> Iterator for UnionIntervalIter<'a, U, L, R>
 where
     L: Iterator<Item = (&'a U, &'a bool)>,
     R: Iterator<Item = (&'a U, &'a bool)>,
-    U: Ord + Clone,
+    U: Ord + Clone + Debug,
 {
     type Item = (U, bool);
 
@@ -282,6 +282,9 @@ where
                 }
             };
 
+            key = k;
+            value = v;
+
             match adv {
                 Adv::Left => {
                     self.left.next();
@@ -297,14 +300,15 @@ where
                     break;
                 }
             }
-            key = k;
-            value = v;
         }
 
         match (key, value) {
             (Some(k), Some(v)) => Some((k, v)),
             (None, None) => None,
-            _ => panic!("Unexpect return value for UnionIntervalIter::next()"),
+            kv => panic!(
+                "Unexpect return value for UnionIntervalIter::next(): {:?}",
+                kv
+            ),
         }
     }
 }
@@ -314,6 +318,10 @@ mod last_values;
 #[cfg(test)]
 mod test {
     use super::*;
+    use proptest::collection;
+    use proptest::prelude::*;
+
+    // Simple types for use in unit tests
 
     #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
     enum TestAlpha {
@@ -359,6 +367,8 @@ mod test {
     }
 
     type TestPM<V> = PartitionMap<TestAlpha, V>;
+
+    // Unit tests
 
     #[test]
     fn full_range_partition_map_includes_just_min_value() {
@@ -555,5 +565,76 @@ mod test {
         let result = sut.next();
 
         assert_matches!(result, Some((C, false)));
+    }
+
+    // Types and Strategy defintions for property tests
+
+    prop_compose!{
+        fn arb_u8_range()(lower in any::<u8>())
+            (lower in Just(lower), upper in lower.., kind in 0u8..4)
+            -> (Bound<u8>, Bound<u8>) {
+                use std::collections::Bound::*;
+                match kind {
+                    0 => (Unbounded, Unbounded),
+                    1 => (Included(lower), Unbounded),
+                    2 => (Unbounded, Excluded(upper)),
+                    _ => (Included(lower), Excluded(upper)),
+                }
+            }
+    }
+
+    prop_compose!{
+        fn arb_partition_map()(range in arb_u8_range())
+            -> PartitionMap<u8, bool> {
+                PartitionMap::new(range, true, false)
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    enum PMOp {
+        Split(u8),
+        Union((Bound<u8>, Bound<u8>)),
+    }
+
+    impl PMOp {
+        fn run(&self, arg: &PartitionMap<u8, bool>) -> PartitionMap<u8, bool> {
+            use self::PMOp::*;
+
+            match self {
+                Split(point) => {
+                    let mut arg = arg.clone();
+                    arg.split(*point, |_| (true, false));
+                    arg
+                }
+                Union(range) => arg.union(&PartitionMap::new(*range, true, false)),
+            }
+        }
+    }
+
+    fn arb_pm_op_vector() -> collection::VecStrategy<BoxedStrategy<PMOp>> {
+        let pmop_strategy = prop_oneof![
+            2 => any::<u8>().prop_map(PMOp::Split),
+            1 => arb_u8_range().prop_map(PMOp::Union),
+        ];
+
+        collection::vec(pmop_strategy.boxed(), ..10)
+    }
+
+    // Property tests and supporting functions
+
+    proptest! {
+        #[test]
+        fn prop_partition_map_contains_min_value(
+            pm in arb_partition_map(),
+            ops in arb_pm_op_vector()
+            )
+        {
+            let mut pm: PartitionMap<u8,bool> = pm.clone();
+            for op in ops {
+                pm = op.run(&pm);
+            }
+
+            prop_assert!(pm.map.contains_key(&0));
+        }
     }
 }
