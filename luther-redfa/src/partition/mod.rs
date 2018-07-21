@@ -119,10 +119,13 @@ where
     where
         F: Fn(V) -> (V, V),
     {
-        let right;
+        let right: Option<V>;
+        let delete_left: Option<U>;
+        let mut delete_right: Option<U> = None;
+        let mut check_value: Option<V> = None;
         {
-            let (key, value) = self.map
-                .range_mut((Bound::Unbounded, Bound::Included(&u)))
+            let mut range = self.map.range_mut((Bound::Unbounded, Bound::Included(&u)));
+            let (key, value) = range
                 .next_back()
                 .expect("Invalid PartitionMap: unable to get element.");
 
@@ -132,12 +135,52 @@ where
                 "Function passed to PartionMap::split() produced identical values."
             );
 
-            if *key != u {
-                *value = l;
-            }
-            right = r;
+            let (l1, r1) = if *key == u && *value == r {
+                (None, None)
+            } else {
+                match range.next_back() {
+                    Some((_, ref v)) if **v != l && *key != u => {
+                        *value = l;
+                        (None, Some(r))
+                    }
+                    Some((_, ref v)) if **v != l => {
+                        check_value = Some(r.clone());
+                        *value = r;
+                        (None, None)
+                    }
+                    Some((_, ref v)) if **v == l => (Some(key.clone()), Some(r)),
+                    None if *value == r => (None, None),
+                    _ => (None, Some(r)),
+                }
+            };
+            delete_left = l1;
+            right = r1;
         }
-        self.map.insert(u, right);
+
+        if let Some(right) = right {
+            self.map.insert(u.clone(), right.clone());
+            delete_right = self.map
+                .range((Bound::Excluded(&u), Bound::Unbounded))
+                .next()
+                .and_then(|(k, v)| if *v == right { Some(k.clone()) } else { None })
+        } else if let Some(check_value) = check_value {
+            delete_right = self.map
+                .range((Bound::Excluded(&u), Bound::Unbounded))
+                .next()
+                .and_then(|(k, v)| {
+                    if *v == check_value {
+                        Some(k.clone())
+                    } else {
+                        None
+                    }
+                })
+        }
+        if let Some(delete_left) = delete_left {
+            self.map.remove(&delete_left);
+        }
+        if let Some(delete_right) = delete_right {
+            self.map.remove(&delete_right);
+        }
     }
 }
 
@@ -318,6 +361,7 @@ mod last_values;
 #[cfg(test)]
 mod test {
     use super::*;
+    use itertools::Itertools;
     use proptest::collection;
     use proptest::prelude::*;
 
@@ -397,12 +441,25 @@ mod test {
     }
 
     #[test]
-    fn bounded_range_partition_map_includes_three_valued() {
+    fn bounded_range_partition_map_includes_three_values() {
         let pm = TestPM::new(TestAlpha::B..TestAlpha::D, true, false);
 
         assert_eq!(pm.map.len(), 3);
         assert!(!pm.map[&TestAlpha::A]);
         assert!(pm.map[&TestAlpha::B]);
+        assert!(!pm.map[&TestAlpha::D]);
+    }
+
+    #[test]
+    #[ignore]
+    fn single_value_bounded_range_partition_map_includes_three_values() {
+        use self::TestAlpha::*;
+
+        let pm = TestPM::new(C..C, true, false);
+
+        assert_eq!(pm.map.len(), 3);
+        assert!(!pm.map[&TestAlpha::A]);
+        assert!(pm.map[&TestAlpha::C]);
         assert!(!pm.map[&TestAlpha::D]);
     }
 
@@ -527,6 +584,57 @@ mod test {
     }
 
     #[test]
+    fn split_partition_map_maintains_non_consectutive_values_to_left() {
+        use self::TestAlpha::*;
+
+        let mut pm = TestPM::new(B.., 1, 0);
+        pm.split(C, |_| (0, 1));
+
+        assert_eq!(pm.map.len(), 2);
+        assert!(pm.map[&A] == 0);
+        assert!(pm.map[&C] == 1);
+    }
+
+    #[test]
+    fn split_partition_map_maintains_non_consectutive_values_to_right() {
+        use self::TestAlpha::*;
+
+        let mut pm = TestPM::new(..D, 0, 1);
+        pm.split(C, |_| (0, 1));
+
+        assert_eq!(pm.map.len(), 2);
+        assert!(pm.map[&A] == 0);
+        assert!(pm.map[&C] == 1);
+    }
+
+    #[test]
+    fn split_partition_map_maintains_non_consecutive_values_at_min_value() {
+        use self::TestAlpha::*;
+
+        let pm = TestPM::new(..C, true, false);
+        let mut pm = pm.union(&TestPM::new(D.., true, false));
+        pm.split(A, |_| (true, false));
+
+        assert_eq!(pm.map.len(), 2);
+        assert!(pm.map[&A] == false);
+        assert!(pm.map[&D] == true);
+    }
+
+    #[test]
+    fn split_partition_map_maintains_non_consecutive_values_after_union() {
+        use self::TestAlpha::*;
+
+        let pm = TestPM::new(..C, true, false);
+        let mut pm = pm.union(&TestPM::new(D.., true, false));
+        pm.split(C, |_| (true, false));
+
+        assert_eq!(pm.map.len(), 3);
+        assert!(pm.map[&A] == true);
+        assert!(pm.map[&C] == false);
+        assert!(pm.map[&D] == true);
+    }
+
+    #[test]
     fn union_partition_map_gets_expected_values() {
         use self::TestAlpha::*;
         let other = TestPM::new(B..D, true, false);
@@ -635,6 +743,21 @@ mod test {
             }
 
             prop_assert!(pm.map.contains_key(&0));
+        }
+
+        #[test]
+        fn prop_partition_map_values_alternate(
+            pm in arb_partition_map(),
+            ops in arb_pm_op_vector())
+        {
+            let mut pm: PartitionMap<u8,bool> = pm.clone();
+            for op in ops {
+                pm = op.run(&pm);
+            }
+
+            for (first, second) in pm.map.values().tuple_windows() {
+                prop_assert_ne!(first, second);
+            }
         }
     }
 }

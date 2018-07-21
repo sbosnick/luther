@@ -19,3 +19,4 @@ maintenance = { status = "actively-developed" }
 [dev-dependencies]
 proptest = "0.8"
 assert_matches = "1.3"
+itertools = "0.7"

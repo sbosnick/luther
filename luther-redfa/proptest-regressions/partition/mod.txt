@@ -5,3 +5,7 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 xs 3503001698 877230102 300127886 2607990617 # shrinks to pm = PartitionMap { map: {0: true} }, ops = [Split(1), Union((Unbounded, Unbounded))]
+xs 4145011780 3506747761 92872779 1279116526 # shrinks to pm = PartitionMap { map: {0: true} }, ops = [Split(1), Split(2)]
+xs 3823566910 2012126713 1836358903 898623472 # shrinks to pm = PartitionMap { map: {0: true} }, ops = [Split(33), Union((Included(34), Unbounded)), Split(0)]
+xs 4213373225 822973584 4088357793 1149824951 # shrinks to pm = PartitionMap { map: {0: true, 139: false} }, ops = [Union((Included(140), Unbounded)), Split(0)]
+xs 1750705565 460698698 880653505 89801092 # shrinks to pm = PartitionMap { map: {0: false, 254: false} }, ops = []

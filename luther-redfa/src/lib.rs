@@ -19,6 +19,9 @@
 #![deny(missing_docs)]
 
 #[cfg(test)]
+extern crate itertools;
+
+#[cfg(test)]
 #[macro_use]
 extern crate proptest;
 
