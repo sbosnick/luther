@@ -229,12 +229,14 @@ where
             let e = e.clone().increment();
             (s, e, v)
         }
+        (Included(s), Excluded(e)) if s == e => (None, None, out_value.clone()),
         (Included(s), Excluded(e)) => {
             let (s, v) = check_min_value(s, in_value, out_value);
             let e = e.clone();
             (s, Some(e), v)
         }
         (Excluded(s), Unbounded) => (s.clone().increment(), None, out_value.clone()),
+        (Excluded(s), Included(e)) if s == e => (None, None, out_value.clone()),
         (Excluded(s), Included(e)) => (
             s.clone().increment(),
             e.clone().increment(),
@@ -451,16 +453,23 @@ mod test {
     }
 
     #[test]
-    #[ignore]
-    fn single_value_bounded_range_partition_map_includes_three_values() {
+    fn empty_bounded_range_partition_map_includes_one_value() {
         use self::TestAlpha::*;
 
         let pm = TestPM::new(C..C, true, false);
 
-        assert_eq!(pm.map.len(), 3);
+        assert_eq!(pm.map.len(), 1);
         assert!(!pm.map[&TestAlpha::A]);
-        assert!(pm.map[&TestAlpha::C]);
-        assert!(!pm.map[&TestAlpha::D]);
+    }
+
+    #[test]
+    fn empty_lower_bounded_range_paratition_map_includes_one_value() {
+        use self::TestAlpha::*;
+
+        let pm = TestPM::new(..A, true, false);
+
+        assert_eq!(pm.map.len(), 1);
+        assert!(!pm.map[&TestAlpha::A]);
     }
 
     #[test]
@@ -500,6 +509,17 @@ mod test {
     }
 
     #[test]
+    fn empty_excluded_lower_bounded_range_partiton_map_includes_one_value() {
+        use self::TestAlpha::*;
+        use std::collections::Bound::*;
+
+        let pm = TestPM::new((Excluded(E), Unbounded), true, false);
+
+        assert_eq!(pm.map.len(), 1);
+        assert!(!pm.map[&A]);
+    }
+
+    #[test]
     fn excluded_lower_include_upper_bounded_range_partition_map_includes_three_values() {
         use self::TestAlpha::*;
         use std::collections::Bound::*;
@@ -510,6 +530,17 @@ mod test {
         assert!(!pm.map[&A]);
         assert!(pm.map[&C]);
         assert!(!pm.map[&E]);
+    }
+
+    #[test]
+    fn empty_excluded_lower_included_upper_bounded_range_partition_map_includes_one_value() {
+        use self::TestAlpha::*;
+        use std::collections::Bound::*;
+
+        let pm = TestPM::new((Excluded(D), Included(D)), true, false);
+
+        assert_eq!(pm.map.len(), 1);
+        assert!(!pm.map[&A]);
     }
 
     #[test]
