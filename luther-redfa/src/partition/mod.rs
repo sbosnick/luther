@@ -123,16 +123,20 @@ where
             let ((key, value), prior) = get_current_and_prior_intervals(u.clone(), &mut self.map);
             let (l, r) = get_values(value.clone(), f);
 
-            // adjust the value of the current interval, if necessary
-            if let Some((_, ref v)) = prior {
-                if *v != l.clone() {
-                    *value = if key != u {
-                        l.clone()
-                    } else {
+            // adjust the value of the current interval, if it is the
+            // first interval or if the prior interval value matches
+            // the new left value
+            prior
+                .clone()
+                .filter(|(_, ref v)| *v == l.clone())
+                .or_else(|| {
+                    *value = if key == u {
                         r.clone()
+                    } else {
+                        l.clone()
                     };
-                }
-            }
+                    None
+                });
 
             // select the insertions and deletions to the left and right
             match prior {
@@ -145,7 +149,7 @@ where
                 Some(_) => (None, Some(r), None),
 
                 // split point already present in the map as the first entry
-                None if key == u && *value == r => (None, None, None),
+                None if key == u => (None, None, Some(r)),
 
                 // interval of split point is the first entry
                 None => (None, Some(r), None),
@@ -814,7 +818,6 @@ mod test {
         }
 
         #[test]
-        #[ignore]
         fn prop_partition_map_values_alternate(
             pm in arb_partition_map(),
             ops in arb_pm_op_vector())
