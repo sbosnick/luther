@@ -6,15 +6,28 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms
 
+/// A context for creating regular expressions.
+///
+/// The factory methods in `RegexContext` create different kinds of `Regex` but
+/// also maintain those `Regex` in `≈-cannonical` form as this is defined in section
+/// 4.1 of Owens et al. The need to maintain the regular expressions in cannonical form
+/// is why there is no means of creating a `Regex` from a `RegexKind`.
 pub struct RegexContext {}
 
 impl RegexContext {
+    /// Create a new `RegexContext`.
     pub fn new() -> RegexContext {
-        unimplemented!()
+        RegexContext {}
     }
 
-    pub fn empty() -> Regex {
-        unimplemented!()
+    /// Create an empty `Regex`.
+    ///
+    /// The empty regular expressions matches everything, including the empty
+    /// string.
+    pub fn empty(&self) -> Regex {
+        Regex {
+            kind: RegexKind::Empty,
+        }
     }
 
     pub fn class() -> Regex {
@@ -42,15 +55,29 @@ impl RegexContext {
     }
 }
 
-pub struct Regex {}
+/// A regular expression.
+///
+/// A `Regex` is created by the factory methods in `RegexContext` and is
+/// associated with that context. It is not possible to create a `Regex`
+/// directly. It is also not possible to create a `Regex` from a `RegexKind` in
+/// order to allow `RegexContext` to maintain certain regular expressions in
+/// cannonical form.
+pub struct Regex {
+    kind: RegexKind,
+}
 
 impl Regex {
-    pub fn kind(&self) -> RegexKind {
-        unimplemented!()
+    /// Get the kind of the regular expression.
+    pub fn kind(&self) -> &RegexKind {
+        &self.kind
     }
 }
 
+/// The kind of a regular expressions.
+#[derive(Debug, PartialEq)]
 pub enum RegexKind {
+    /// The empty regular expressions which matches everything, including the
+    /// empty string.
     Empty,
     Class,
     Concat,
@@ -58,4 +85,18 @@ pub enum RegexKind {
     Alteration,
     And,
     Complement,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn empty_regex_has_kind_empty() {
+        let ctx = RegexContext::new();
+
+        let sut = ctx.empty();
+
+        assert_eq!(sut.kind(), &RegexKind::Empty);
+    }
 }

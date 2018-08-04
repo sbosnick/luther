@@ -15,6 +15,7 @@ coveralls = { repository = "sbosnick/luther" }
 maintenance = { status = "actively-developed" }
 
 [dependencies]
+typed-arena = "1.4"
 
 [dev-dependencies]
 proptest = "0.8"

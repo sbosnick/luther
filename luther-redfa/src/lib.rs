@@ -18,6 +18,8 @@
 
 #![deny(missing_docs)]
 
+extern crate typed_arena;
+
 #[cfg(test)]
 extern crate itertools;
 
@@ -30,7 +32,8 @@ extern crate proptest;
 extern crate assert_matches;
 
 pub mod alphabet;
-pub mod regex;
+//pub mod regex; TODO: export regex as public once documented
+mod regex;
 
 mod partition;
 mod range;
