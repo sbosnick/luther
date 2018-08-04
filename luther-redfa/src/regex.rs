@@ -6,18 +6,24 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms
 
+use typed_arena::Arena;
+
 /// A context for creating regular expressions.
 ///
 /// The factory methods in `RegexContext` create different kinds of `Regex` but
 /// also maintain those `Regex` in `≈-cannonical` form as this is defined in section
 /// 4.1 of Owens et al. The need to maintain the regular expressions in cannonical form
 /// is why there is no means of creating a `Regex` from a `RegexKind`.
-pub struct RegexContext {}
+pub struct RegexContext {
+    arena: Arena<RegexKind>,
+}
 
 impl RegexContext {
     /// Create a new `RegexContext`.
     pub fn new() -> RegexContext {
-        RegexContext {}
+        RegexContext {
+            arena: Arena::new(),
+        }
     }
 
     /// Create an empty `Regex`.
@@ -26,31 +32,31 @@ impl RegexContext {
     /// string.
     pub fn empty(&self) -> Regex {
         Regex {
-            kind: RegexKind::Empty,
+            kind: self.arena.alloc(RegexKind::Empty),
         }
     }
 
-    pub fn class() -> Regex {
+    pub fn class(&self) -> Regex {
         unimplemented!()
     }
 
-    pub fn concat() -> Regex {
+    pub fn concat(&self) -> Regex {
         unimplemented!()
     }
 
-    pub fn repetition() -> Regex {
+    pub fn repetition(&self) -> Regex {
         unimplemented!()
     }
 
-    pub fn alteration() -> Regex {
+    pub fn alteration(&self) -> Regex {
         unimplemented!()
     }
 
-    pub fn and() -> Regex {
+    pub fn and(&self) -> Regex {
         unimplemented!()
     }
 
-    pub fn complement() -> Regex {
+    pub fn complement(&self) -> Regex {
         unimplemented!()
     }
 }
@@ -62,11 +68,11 @@ impl RegexContext {
 /// directly. It is also not possible to create a `Regex` from a `RegexKind` in
 /// order to allow `RegexContext` to maintain certain regular expressions in
 /// cannonical form.
-pub struct Regex {
-    kind: RegexKind,
+pub struct Regex<'a> {
+    kind: &'a RegexKind,
 }
 
-impl Regex {
+impl<'a> Regex<'a> {
     /// Get the kind of the regular expression.
     pub fn kind(&self) -> &RegexKind {
         &self.kind
