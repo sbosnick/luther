@@ -125,9 +125,9 @@ where
 
             // adjust the value of the current interval, if necessary
             if let Some((_, ref v)) = prior {
-                if *v != r.clone() {
+                if *v != l.clone() {
                     *value = if key != u {
-                        l
+                        l.clone()
                     } else {
                         r.clone()
                     };
@@ -136,9 +136,10 @@ where
 
             // select the insertions and deletions to the left and right
             match prior {
-                Some((_, ref v)) if *v != r && key != u => (None, Some(r), None),
+                Some((_, ref v)) if *v != l && key != u => (None, Some(r), None),
+                Some((_, ref v)) if *v == l && key != u => (Some(key), Some(r), None),
                 Some((_, ref v)) if *v != r => (None, None, Some(r)),
-                Some((_, ref v)) if *v == r => (Some(key), Some(r), None),
+                Some((_, ref v)) if *v == r => (Some(key), None, Some(r)),
                 None if *value == r => (None, None, None),
                 _ if key == u && *value == r => (None, None, None),
                 _ => (None, Some(r), None),
@@ -634,7 +635,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn split_partition_map_maintains_non_consectutive_values_to_left() {
         use self::TestAlpha::*;
 
