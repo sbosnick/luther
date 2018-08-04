@@ -136,13 +136,19 @@ where
 
             // select the insertions and deletions to the left and right
             match prior {
-                Some((_, ref v)) if *v != l && key != u => (None, Some(r), None),
-                Some((_, ref v)) if *v == l && key != u => (Some(key), Some(r), None),
-                Some((_, ref v)) if *v != r => (None, None, Some(r)),
-                Some((_, ref v)) if *v == r => (Some(key), None, Some(r)),
-                None if *value == r => (None, None, None),
-                _ if key == u && *value == r => (None, None, None),
-                _ => (None, Some(r), None),
+                // split point was already present in the map and is not the first entry
+                Some((_, ref v)) if key == u && *v != r => (None, None, Some(r)),
+                Some((_, ref v)) if key == u && *v == r => (Some(key), None, Some(r)),
+
+                // split point not present in map and its interval is not the first entry
+                Some((_, ref v)) if *v == l => (Some(key), Some(r), None),
+                Some(_) => (None, Some(r), None),
+
+                // split point already present in the map as the first entry
+                None if key == u && *value == r => (None, None, None),
+
+                // interval of split point is the first entry
+                None => (None, Some(r), None),
             }
         };
 
