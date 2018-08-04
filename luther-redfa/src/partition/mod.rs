@@ -6,6 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms
 
+mod last_values;
+
 use std::collections::{BTreeMap, Bound};
 use std::fmt::Debug;
 use std::iter::Peekable;
@@ -29,7 +31,7 @@ use range::RangeArgument;
 /// Both U and V must be `Clone`, but the `clone` implemtation should be an effecient
 /// one. It is likely that most useful types for U are `Copy`, but there may be a useful
 /// type for V that is not `Copy` but has an inexpensive `Clone` implementation (i.e.
-/// `Arc`).
+/// `Arc`). U must also be and `Alphabet`.
 ///
 /// [Lai]: http://hdl.handle.net/1721.1/45638
 #[derive(Clone, Debug)]
@@ -388,7 +390,30 @@ where
     }
 }
 
-mod last_values;
+/// A `PartitionSet` is a set of `U` implemented in terms of a `PartitionMap` to
+/// `bool`.
+///
+/// # Type Parameter
+/// | U | The universe to partition to determine set membership |
+///
+/// U must be `Clone` but the `clone` implementation should be an efficient one. It is
+/// likely that most useful types for U are `Copy`. U must also be an `Alphabet`.
+#[derive(Clone, Debug)]
+pub struct PartitionSet<U> {
+    map: PartitionMap<U, bool>,
+}
+
+impl<U: Alphabet + Debug> PartitionSet<U> {
+    pub fn new<R: RangeArgument<U>>(range: R) -> PartitionSet<U> {
+        PartitionSet {
+            map: PartitionMap::new(range, true, false),
+        }
+    }
+
+    pub fn contains(&self, u: &U) -> bool {
+        self.map.get(u).clone()
+    }
+}
 
 #[cfg(test)]
 mod test {
@@ -443,6 +468,7 @@ mod test {
     }
 
     type TestPM<V> = PartitionMap<TestAlpha, V>;
+    type TestPS = PartitionSet<TestAlpha>;
 
     // Unit tests
 
@@ -745,6 +771,19 @@ mod test {
         let result = sut.next();
 
         assert_matches!(result, Some((C, false)));
+    }
+
+    #[test]
+    fn patition_set_contains_expected_values() {
+        use self::TestAlpha::*;
+
+        let sut = TestPS::new(B..D);
+
+        assert!(!sut.contains(&A));
+        assert!(sut.contains(&B));
+        assert!(sut.contains(&C));
+        assert!(!sut.contains(&D));
+        assert!(!sut.contains(&E));
     }
 
     // Types and Strategy defintions for property tests
