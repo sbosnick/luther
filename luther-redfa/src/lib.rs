@@ -30,6 +30,7 @@ extern crate proptest;
 extern crate assert_matches;
 
 pub mod alphabet;
+pub mod regex;
 
 mod partition;
 mod range;
