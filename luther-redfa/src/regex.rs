@@ -197,6 +197,13 @@ pub struct Complement<'a, A: 'a + Alphabet> {
     inner: &'a RegexKind<'a, A>,
 }
 
+impl<'a, A: Alphabet> Complement<'a, A> {
+    /// Get the inner regular expression that is being complemented.
+    pub fn inner(&'a self) -> Regex<'a, A> {
+        Regex { kind: self.inner }
+    }
+}
+
 /// An iterator over the closed ranges of a class.
 ///
 /// This is the return type of the `Class<A>::ranges()` method.
@@ -318,6 +325,18 @@ mod test {
         let sut = ctx.complement(class);
 
         assert_matches!(sut.kind(), &RegexKind::Complement(_));
+    }
+
+    #[test]
+    fn simple_complement_regex_round_trips_original_kind() {
+        let ctx = RegexContext::new();
+        let class = ctx.class(vec![Range::new('a', 'c')]);
+
+        let sut = ctx.complement(class);
+
+        assert_matches!(sut.kind(), &RegexKind::Complement(ref complement) => {
+            assert_matches!(complement.inner().kind(), &RegexKind::Class(_));
+        });
     }
 
     #[test]
