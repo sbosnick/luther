@@ -36,13 +36,13 @@ use typed_arena::Arena;
 ///
 /// # Type Parameter
 /// - A: the alphabet over which the regular expression operates
-pub struct RegexContext<A: Alphabet> {
-    arena: Arena<RegexKind<A>>,
+pub struct RegexContext<'a, A: 'a + Alphabet> {
+    arena: Arena<RegexKind<'a, A>>,
 }
 
-impl<A: Alphabet> RegexContext<A> {
+impl<'a, A: Alphabet> RegexContext<'a, A> {
     /// Create a new `RegexContext`.
-    pub fn new() -> RegexContext<A> {
+    pub fn new() -> RegexContext<'a, A> {
         RegexContext {
             arena: Arena::new(),
         }
@@ -52,7 +52,7 @@ impl<A: Alphabet> RegexContext<A> {
     ///
     /// The empty regular expressions matches everything, including the empty
     /// string.
-    pub fn empty(&self) -> Regex<A> {
+    pub fn empty(&'a self) -> Regex<'a, A> {
         Regex {
             kind: self.arena.alloc(RegexKind::Empty),
         }
@@ -64,7 +64,7 @@ impl<A: Alphabet> RegexContext<A> {
     /// ranges specified by `ranges`. This factory can also create the empty set
     /// by passing in an empty iterator for `ranges`. The empty set does not
     /// match anything.
-    pub fn class<I>(&self, ranges: I) -> Regex<A>
+    pub fn class<I>(&'a self, ranges: I) -> Regex<A>
     where
         I: IntoIterator<Item = Range<A>>,
     {
@@ -94,9 +94,18 @@ impl<A: Alphabet> RegexContext<A> {
         unimplemented!()
     }
 
-    /// Not yet implemented.
-    pub fn complement(&self) -> Regex<A> {
-        unimplemented!()
+    /// Create a complement (or negation) `Regex`.
+    ///
+    /// The complement regular expression matches everything that the supplied
+    /// `other` regular expression does not match.
+    pub fn complement(&self, other: Regex<'a, A>) -> Regex<A> {
+        let kind = if let RegexKind::Complement(complement) = other.kind {
+            complement.inner
+        } else {
+            self.arena
+                .alloc(RegexKind::Complement(Complement { inner: other.kind }))
+        };
+        Regex { kind }
     }
 }
 
@@ -108,12 +117,12 @@ impl<A: Alphabet> RegexContext<A> {
 /// order to allow `RegexContext` to maintain certain regular expressions in
 /// cannonical form.
 pub struct Regex<'a, A: 'a + Alphabet> {
-    kind: &'a RegexKind<A>,
+    kind: &'a RegexKind<'a, A>,
 }
 
 impl<'a, A: Alphabet> Regex<'a, A> {
     /// Get the kind of the regular expression.
-    pub fn kind(&self) -> &RegexKind<A> {
+    pub fn kind(&self) -> &RegexKind<'a, A> {
         &self.kind
     }
 }
@@ -123,7 +132,7 @@ impl<'a, A: Alphabet> Regex<'a, A> {
 /// # Type Parameter
 /// - A: the alphabet over which the regular expression operates
 #[derive(Debug, PartialEq)]
-pub enum RegexKind<A: Alphabet> {
+pub enum RegexKind<'a, A: 'a + Alphabet> {
     /// The empty regular expressions which matches everything, including the
     /// empty string.
     Empty,
@@ -147,8 +156,9 @@ pub enum RegexKind<A: Alphabet> {
     /// Not yet implemented.
     And,
 
-    /// Not yet implemented.
-    Complement,
+    /// A regular expression which matches the complement (or negation) of a different
+    /// regular expression.
+    Complement(Complement<'a, A>),
 }
 
 /// A (possibly empty) subset of the alphabet `A`.
@@ -178,6 +188,13 @@ impl<A: Alphabet> FromIterator<Range<A>> for Class<A> {
             set: iter.into_iter().collect(),
         }
     }
+}
+
+/// A regular expression holder for which the complement (or negation) has been
+/// taken.
+#[derive(Debug, PartialEq)]
+pub struct Complement<'a, A: 'a + Alphabet> {
+    inner: &'a RegexKind<'a, A>,
 }
 
 /// An iterator over the closed ranges of a class.
@@ -291,5 +308,26 @@ mod test {
             let ranges: Vec<Range<_>> = class.ranges().collect();
             assert_eq!(ranges, expected);
         });
+    }
+
+    #[test]
+    fn simple_complement_regex_has_kind_complement() {
+        let ctx = RegexContext::new();
+        let class = ctx.class(vec![Range::new('a', 'c')]);
+
+        let sut = ctx.complement(class);
+
+        assert_matches!(sut.kind(), &RegexKind::Complement(_));
+    }
+
+    #[test]
+    fn double_complement_regex_has_orginal_kind() {
+        let ctx = RegexContext::new();
+        let class = ctx.class(vec![Range::new('a', 'c')]);
+        let complement = ctx.complement(class);
+
+        let sut = ctx.complement(complement);
+
+        assert_matches!(sut.kind(), &RegexKind::Class(_));
     }
 }
