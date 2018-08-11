@@ -197,6 +197,10 @@ where
             map: UnionIntervalIter::new(self.map.range(..), other.map.range(..)).collect(),
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.len() == 1 && !self.map[&U::min_value()]
+    }
 }
 
 impl<U: Alphabet> FromIterator<Range<U>> for PartitionMap<U, bool> {
@@ -206,7 +210,7 @@ impl<U: Alphabet> FromIterator<Range<U>> for PartitionMap<U, bool> {
     {
         use itertools::Position::*;
 
-        let map = iter.into_iter()
+        let mut map: BTreeMap<U, bool> = iter.into_iter()
             .sorted_by_key(|range| range.start())
             .into_iter()
             .coalesce(|prev, curr| prev.coalesce(&curr))
@@ -229,6 +233,10 @@ impl<U: Alphabet> FromIterator<Range<U>> for PartitionMap<U, bool> {
                 array
             })
             .collect();
+
+        if map.is_empty() {
+            map.insert(U::min_value(), false);
+        }
 
         PartitionMap { map }
     }
@@ -493,6 +501,10 @@ impl<U: Alphabet + Debug> PartitionSet<U> {
     pub fn contains(&self, u: &U) -> bool {
         self.map.get(u).clone()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
 }
 
 impl<U: Alphabet> FromIterator<Range<U>> for PartitionSet<U> {
@@ -535,6 +547,7 @@ mod test {
     use itertools::Itertools;
     use proptest::collection;
     use proptest::prelude::*;
+    use std::iter;
 
     // Simple types for use in unit tests
 
@@ -912,6 +925,15 @@ mod test {
     }
 
     #[test]
+    fn partition_map_from_empty_ranges_have_expected_value() {
+        let ranges = Vec::<Range<u8>>::new();
+
+        let sut: PartitionMap<_, _> = ranges.into_iter().collect();
+
+        assert!(!sut.map[&0]);
+    }
+
+    #[test]
     fn partition_map_iterates_expected_ranges() {
         let ranges = vec![Range::new(5u8, 8), Range::new(15, 25), Range::new(50, 60)];
 
@@ -932,6 +954,15 @@ mod test {
         assert!(sut.contains(&C));
         assert!(!sut.contains(&D));
         assert!(!sut.contains(&E));
+    }
+
+    #[test]
+    fn patition_set_from_empty_ranges_is_empty() {
+        let range = iter::empty::<Range<u8>>();
+
+        let sut: PartitionSet<_> = range.collect();
+
+        assert!(sut.is_empty());
     }
 
     // Types and Strategy defintions for property tests

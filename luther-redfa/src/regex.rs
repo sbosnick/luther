@@ -21,6 +21,7 @@
 //! directly from a `RegexKind<A>`. The required use of factory methods allows for
 //! mataining the regular expressons in cannonical form.
 
+use std::fmt::Debug;
 use std::iter::FromIterator;
 
 use alphabet::Alphabet;
@@ -40,7 +41,7 @@ pub struct RegexContext<'a, A: 'a + Alphabet> {
     arena: Arena<RegexKind<'a, A>>,
 }
 
-impl<'a, A: Alphabet> RegexContext<'a, A> {
+impl<'a, A: Alphabet + Debug> RegexContext<'a, A> {
     /// Create a new `RegexContext`.
     pub fn new() -> RegexContext<'a, A> {
         RegexContext {
@@ -79,9 +80,19 @@ impl<'a, A: Alphabet> RegexContext<'a, A> {
         unimplemented!()
     }
 
-    /// Not yet implemented.
-    pub fn repetition(&self) -> Regex<A> {
-        unimplemented!()
+    /// Create a repetition `Regex`.
+    ///
+    /// The repetition regular expression matches 0 or more occurances of of
+    /// the `other` regular expression. The only kind of repetition directly
+    /// supported by `RegexContext` is kleene star.
+    pub fn repetition(&self, other: Regex<'a, A>) -> Regex<A> {
+        let kind = match other.kind {
+            RegexKind::Repetition(_) | RegexKind::Empty => other.kind,
+            RegexKind::Class(class) if class.is_empty() => self.arena.alloc(RegexKind::Empty),
+            _ => self.arena
+                .alloc(RegexKind::Repetition(Repetition { inner: other.kind })),
+        };
+        Regex { kind }
     }
 
     /// Not yet implemented.
@@ -147,8 +158,11 @@ pub enum RegexKind<'a, A: 'a + Alphabet> {
     /// Not yet implemented.
     Concat,
 
-    /// Not yet implemented.
-    Repetition,
+    /// A regular expression which matches 0 or more instances of a different
+    /// regular expression.
+    ///
+    /// Note: The only kind of repetition that is directly supported is kleene star.
+    Repetition(Repetition<'a, A>),
 
     /// Not yet implemented.
     Alteration,
@@ -167,7 +181,7 @@ pub struct Class<A: Alphabet> {
     set: PartitionSet<A>,
 }
 
-impl<A: Alphabet> Class<A> {
+impl<A: Alphabet + Debug> Class<A> {
     /// Get an iterator over the closed ranges that make up the `Class`.
     ///
     /// The ranges returned by the iterator will be non-overlapping ranges
@@ -176,6 +190,11 @@ impl<A: Alphabet> Class<A> {
         Ranges {
             inner: self.set.into_iter(),
         }
+    }
+
+    /// Check if the subset of `A` is empty.
+    pub fn is_empty(&self) -> bool {
+        self.set.is_empty()
     }
 }
 
@@ -199,6 +218,19 @@ pub struct Complement<'a, A: 'a + Alphabet> {
 
 impl<'a, A: Alphabet> Complement<'a, A> {
     /// Get the inner regular expression that is being complemented.
+    pub fn inner(&'a self) -> Regex<'a, A> {
+        Regex { kind: self.inner }
+    }
+}
+
+/// A regular expression holder for which repetition has been applied.
+#[derive(Debug, PartialEq)]
+pub struct Repetition<'a, A: 'a + Alphabet> {
+    inner: &'a RegexKind<'a, A>,
+}
+
+impl<'a, A: Alphabet> Repetition<'a, A> {
+    /// Get the inner regular expression that is being repeated.
     pub fn inner(&'a self) -> Regex<'a, A> {
         Regex { kind: self.inner }
     }
@@ -348,5 +380,60 @@ mod test {
         let sut = ctx.complement(complement);
 
         assert_matches!(sut.kind(), &RegexKind::Class(_));
+    }
+
+    #[test]
+    fn simple_repetition_regex_has_kind_repetition() {
+        let ctx = RegexContext::new();
+        let class = ctx.class(vec![Range::new('a', 'c')]);
+
+        let sut = ctx.repetition(class);
+
+        assert_matches!(sut.kind(), &RegexKind::Repetition(_));
+    }
+
+    #[test]
+    fn simple_repetition_regex_round_trips_original_kind() {
+        let ctx = RegexContext::new();
+        let class = ctx.class(vec![Range::new('a', 'c')]);
+
+        let sut = ctx.repetition(class);
+
+        assert_matches!(sut.kind(), &RegexKind::Repetition(ref repetition) => {
+            assert_matches!(repetition.inner().kind(), &RegexKind::Class(_));
+        });
+    }
+
+    #[test]
+    fn double_repetition_does_not_apply_twice() {
+        let ctx = RegexContext::new();
+        let class = ctx.class(vec![Range::new('a', 'c')]);
+        let repetition = ctx.repetition(class);
+
+        let sut = ctx.repetition(repetition);
+
+        assert_matches!(sut.kind(), &RegexKind::Repetition(ref repetition) => {
+            assert_matches!(repetition.inner().kind(), &RegexKind::Class(_));
+        });
+    }
+
+    #[test]
+    fn empty_repetition_is_still_emtpy() {
+        let ctx = RegexContext::<char>::new();
+        let empty = ctx.empty();
+
+        let sut = ctx.repetition(empty);
+
+        assert_matches!(sut.kind(), &RegexKind::Empty);
+    }
+
+    #[test]
+    fn null_repetition_is_empty() {
+        let ctx = RegexContext::<char>::new();
+        let class = ctx.class(Vec::new());
+
+        let sut = ctx.repetition(class);
+
+        assert_matches!(sut.kind(), &RegexKind::Empty);
     }
 }
