@@ -6,6 +6,21 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms
 
+//! Regular expression types.
+//!
+//! The types in this module provide a representation of the extended regular
+//! expressions supported by `luther_redfa`. The key types are `RegexContext<A>`,
+//! `Regex<A>` and `RegexKind<A>`.
+//!
+//! Most of the regular expression types are generic over the alphabet that they
+//! are designed to match. The alphabet is identifed by the `Alphabet` trait, for
+//! which the `luther_redfa` crate provides `u8` and `char` implementations.
+//!
+//! `RegexContext<A>` is a factory for creating `Regex<A>` and has factory methods
+//! for each variant of `RegexKind<A>`. There is no means of creating a `Regex<A>`
+//! directly from a `RegexKind<A>`. The required use of factory methods allows for
+//! mataining the regular expressons in cannonical form.
+
 use std::iter::FromIterator;
 
 use alphabet::Alphabet;
@@ -59,22 +74,27 @@ impl<A: Alphabet> RegexContext<A> {
         }
     }
 
+    /// Not yet implemented.
     pub fn concat(&self) -> Regex<A> {
         unimplemented!()
     }
 
+    /// Not yet implemented.
     pub fn repetition(&self) -> Regex<A> {
         unimplemented!()
     }
 
+    /// Not yet implemented.
     pub fn alteration(&self) -> Regex<A> {
         unimplemented!()
     }
 
+    /// Not yet implemented.
     pub fn and(&self) -> Regex<A> {
         unimplemented!()
     }
 
+    /// Not yet implemented.
     pub fn complement(&self) -> Regex<A> {
         unimplemented!()
     }
@@ -98,7 +118,7 @@ impl<'a, A: Alphabet> Regex<'a, A> {
     }
 }
 
-/// The kind of a regular expressions.
+/// The kind of a regular expression.
 ///
 /// # Type Parameter
 /// - A: the alphabet over which the regular expression operates
@@ -114,10 +134,20 @@ pub enum RegexKind<A: Alphabet> {
     /// If the subset is empty then the resulting regular expression will match
     /// nothing.
     Class(Class<A>),
+
+    /// Not yet implemented.
     Concat,
+
+    /// Not yet implemented.
     Repetition,
+
+    /// Not yet implemented.
     Alteration,
+
+    /// Not yet implemented.
     And,
+
+    /// Not yet implemented.
     Complement,
 }
 

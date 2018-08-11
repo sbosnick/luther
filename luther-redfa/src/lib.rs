@@ -31,8 +31,7 @@ extern crate proptest;
 extern crate assert_matches;
 
 pub mod alphabet;
-//pub mod regex; TODO: export regex as public once documented
-mod regex;
+pub mod regex;
 
 mod partition;
 mod range;
