@@ -18,10 +18,9 @@
 
 #![deny(missing_docs)]
 
-extern crate typed_arena;
-
-#[cfg(test)]
+extern crate arrayvec;
 extern crate itertools;
+extern crate typed_arena;
 
 #[cfg(test)]
 #[macro_use]

@@ -8,12 +8,15 @@
 
 mod last_values;
 
-use std::collections::{BTreeMap, Bound};
+use std::collections::{btree_map, BTreeMap, Bound};
 use std::fmt::Debug;
-use std::iter::Peekable;
+use std::iter::{FromIterator, Peekable};
 
 use alphabet::Alphabet;
+use arrayvec::ArrayVec;
+use itertools::Itertools;
 use range::RangeArgument;
+use regex::Range;
 
 /// A `PartitionMap` is an effecient map from all elements of `U` to a value
 /// from `V`.
@@ -34,7 +37,7 @@ use range::RangeArgument;
 /// `Arc`). U must also be and `Alphabet`.
 ///
 /// [Lai]: http://hdl.handle.net/1721.1/45638
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PartitionMap<U, V> {
     map: BTreeMap<U, V>,
 }
@@ -196,6 +199,83 @@ where
     }
 }
 
+impl<U: Alphabet> FromIterator<Range<U>> for PartitionMap<U, bool> {
+    fn from_iter<T>(iter: T) -> Self
+    where
+        T: IntoIterator<Item = Range<U>>,
+    {
+        use itertools::Position::*;
+
+        let map = iter.into_iter()
+            .sorted_by_key(|range| range.start())
+            .into_iter()
+            .coalesce(|prev, curr| prev.coalesce(&curr))
+            .with_position()
+            .flat_map(|item| {
+                let mut array = ArrayVec::<[_; 3]>::new();
+
+                let (start, end) = match item {
+                    First(item) | Only(item) => {
+                        if item.start() != U::min_value() {
+                            array.push((U::min_value(), false));
+                        }
+                        (item.start(), item.end())
+                    }
+                    Middle(item) | Last(item) => (item.start(), item.end()),
+                };
+                array.push((start, true));
+                end.increment().map(|end| array.push((end, false)));
+
+                array
+            })
+            .collect();
+
+        PartitionMap { map }
+    }
+}
+
+impl<'a, U: Alphabet> IntoIterator for &'a PartitionMap<U, bool> {
+    type Item = Range<U>;
+    type IntoIter = PartitionMapRangeIter<'a, U>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        PartitionMapRangeIter {
+            inner: (&self.map).into_iter(),
+            first: true,
+        }
+    }
+}
+
+pub struct PartitionMapRangeIter<'a, U: 'a + Alphabet> {
+    inner: btree_map::Iter<'a, U, bool>,
+    first: bool,
+}
+
+impl<'a, U: Alphabet> Iterator for PartitionMapRangeIter<'a, U> {
+    type Item = Range<U>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner
+            .next()
+            .and_then(|(k, v)| {
+                let start = if self.first && !v {
+                    self.inner.next()
+                } else {
+                    Some((k, v))
+                };
+                self.first = false;
+                start
+            })
+            .map(|(start, _)| {
+                let end = self.inner.next().map_or(U::max_value(), |(end, _)| {
+                    end.decrement()
+                        .expect("U::min_value() found in location other than the first one")
+                });
+                Range::new(start.clone(), end)
+            })
+    }
+}
+
 fn get_values<V, F>(v: V, f: F) -> (V, V)
 where
     V: PartialEq + Debug,
@@ -204,7 +284,7 @@ where
     let (l, r) = f(v);
     assert_ne!(
         l, r,
-        "Function passed to ParttionMap::split() produced idential values."
+        "Function passed to PartitionMap::split() produced idential values."
     );
     (l, r)
 }
@@ -398,7 +478,7 @@ where
 ///
 /// U must be `Clone` but the `clone` implementation should be an efficient one. It is
 /// likely that most useful types for U are `Copy`. U must also be an `Alphabet`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PartitionSet<U> {
     map: PartitionMap<U, bool>,
 }
@@ -412,6 +492,40 @@ impl<U: Alphabet + Debug> PartitionSet<U> {
 
     pub fn contains(&self, u: &U) -> bool {
         self.map.get(u).clone()
+    }
+}
+
+impl<U: Alphabet> FromIterator<Range<U>> for PartitionSet<U> {
+    fn from_iter<T>(iter: T) -> Self
+    where
+        T: IntoIterator<Item = Range<U>>,
+    {
+        PartitionSet {
+            map: iter.into_iter().collect(),
+        }
+    }
+}
+
+impl<'a, U: Alphabet> IntoIterator for &'a PartitionSet<U> {
+    type Item = Range<U>;
+    type IntoIter = PartitionSetRangeIter<'a, U>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        PartitionSetRangeIter {
+            inner: self.map.into_iter(),
+        }
+    }
+}
+
+pub struct PartitionSetRangeIter<'a, U: 'a + Alphabet> {
+    inner: PartitionMapRangeIter<'a, U>,
+}
+
+impl<'a, U: Alphabet> Iterator for PartitionSetRangeIter<'a, U> {
+    type Item = Range<U>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next()
     }
 }
 
@@ -771,6 +885,40 @@ mod test {
         let result = sut.next();
 
         assert_matches!(result, Some((C, false)));
+    }
+
+    #[test]
+    fn partion_map_from_ranges_has_expected_values() {
+        let ranges = vec![
+            Range::new(15u8, 25),
+            Range::new(30, 35),
+            Range::new(36, 40),
+            Range::new(50, 60),
+            Range::new(55, 65),
+            Range::new(5, 8),
+        ];
+
+        let sut: PartitionMap<_, _> = ranges.into_iter().collect();
+
+        assert!(!sut.map[&0]);
+        assert!(sut.map[&5]);
+        assert!(!sut.map[&9]);
+        assert!(sut.map[&15]);
+        assert!(!sut.map[&26]);
+        assert!(sut.map[&30]);
+        assert!(!sut.map[&41]);
+        assert!(sut.map[&50]);
+        assert!(!sut.map[&66]);
+    }
+
+    #[test]
+    fn partition_map_iterates_expected_ranges() {
+        let ranges = vec![Range::new(5u8, 8), Range::new(15, 25), Range::new(50, 60)];
+
+        let sut = PartitionMap::from_iter(ranges.clone());
+        let result: Vec<_> = sut.into_iter().collect();
+
+        assert_eq!(result, ranges);
     }
 
     #[test]
