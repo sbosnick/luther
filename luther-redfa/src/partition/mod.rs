@@ -37,7 +37,7 @@ use regex::Range;
 /// `Arc`). U must also be and `Alphabet`.
 ///
 /// [Lai]: http://hdl.handle.net/1721.1/45638
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct PartitionMap<U, V> {
     map: BTreeMap<U, V>,
 }
@@ -486,7 +486,7 @@ where
 ///
 /// U must be `Clone` but the `clone` implementation should be an efficient one. It is
 /// likely that most useful types for U are `Copy`. U must also be an `Alphabet`.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct PartitionSet<U> {
     map: PartitionMap<U, bool>,
 }

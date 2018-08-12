@@ -95,9 +95,27 @@ impl<'a, A: Alphabet + Debug> RegexContext<'a, A> {
         Regex { kind }
     }
 
-    /// Not yet implemented.
-    pub fn alteration(&self) -> Regex<A> {
-        unimplemented!()
+    /// Create an alteration `Regex`.
+    ///
+    /// The alteration regular expression matches either the `lhs` regular
+    /// expression or the `rhs` regular expression.
+    pub fn alteration(&'a self, lhs: Regex<'a, A>, rhs: Regex<'a, A>) -> Regex<A> {
+        if lhs.kind.is_null() || rhs.kind.is_complement_null() {
+            return rhs;
+        }
+        if rhs.kind.is_null() || lhs.kind.is_complement_null() {
+            return lhs;
+        }
+        if lhs.kind == rhs.kind {
+            return lhs;
+        }
+
+        let (first, second) = order_alternatives(&self.arena, lhs.kind, rhs.kind);
+
+        let kind = self.arena
+            .alloc(RegexKind::Alteration(Alteration { first, second }));
+
+        Regex { kind }
     }
 
     /// Not yet implemented.
@@ -127,6 +145,7 @@ impl<'a, A: Alphabet + Debug> RegexContext<'a, A> {
 /// directly. It is also not possible to create a `Regex` from a `RegexKind` in
 /// order to allow `RegexContext` to maintain certain regular expressions in
 /// cannonical form.
+#[derive(Debug, PartialEq, Clone)]
 pub struct Regex<'a, A: 'a + Alphabet> {
     kind: &'a RegexKind<'a, A>,
 }
@@ -142,7 +161,7 @@ impl<'a, A: Alphabet> Regex<'a, A> {
 ///
 /// # Type Parameter
 /// - A: the alphabet over which the regular expression operates
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, PartialOrd)]
 pub enum RegexKind<'a, A: 'a + Alphabet> {
     /// The empty regular expressions which matches everything, including the
     /// empty string.
@@ -164,8 +183,9 @@ pub enum RegexKind<'a, A: 'a + Alphabet> {
     /// Note: The only kind of repetition that is directly supported is kleene star.
     Repetition(Repetition<'a, A>),
 
-    /// Not yet implemented.
-    Alteration,
+    /// A regular expression which matches either of two different regular
+    /// expressions.
+    Alteration(Alteration<'a, A>),
 
     /// Not yet implemented.
     And,
@@ -175,8 +195,29 @@ pub enum RegexKind<'a, A: 'a + Alphabet> {
     Complement(Complement<'a, A>),
 }
 
+impl<'a, A: Alphabet + Debug> RegexKind<'a, A> {
+    fn is_null(&self) -> bool {
+        use self::RegexKind::*;
+
+        match self {
+            Class(class) if class.is_empty() => true,
+            _ => false,
+        }
+    }
+
+    fn is_complement_null(&self) -> bool {
+        use self::RegexKind::*;
+
+        if let Complement(complement) = self {
+            complement.inner.is_null()
+        } else {
+            false
+        }
+    }
+}
+
 /// A (possibly empty) subset of the alphabet `A`.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, PartialOrd)]
 pub struct Class<A: Alphabet> {
     set: PartitionSet<A>,
 }
@@ -211,7 +252,7 @@ impl<A: Alphabet> FromIterator<Range<A>> for Class<A> {
 
 /// A regular expression holder for which the complement (or negation) has been
 /// taken.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, PartialOrd)]
 pub struct Complement<'a, A: 'a + Alphabet> {
     inner: &'a RegexKind<'a, A>,
 }
@@ -224,7 +265,7 @@ impl<'a, A: Alphabet> Complement<'a, A> {
 }
 
 /// A regular expression holder for which repetition has been applied.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, PartialOrd)]
 pub struct Repetition<'a, A: 'a + Alphabet> {
     inner: &'a RegexKind<'a, A>,
 }
@@ -233,6 +274,26 @@ impl<'a, A: Alphabet> Repetition<'a, A> {
     /// Get the inner regular expression that is being repeated.
     pub fn inner(&'a self) -> Regex<'a, A> {
         Regex { kind: self.inner }
+    }
+}
+
+/// A regular expression holder for regular expressions used as
+/// alternatives (through alteration).
+#[derive(Debug, PartialEq, PartialOrd)]
+pub struct Alteration<'a, A: 'a + Alphabet> {
+    first: &'a RegexKind<'a, A>,
+    second: &'a RegexKind<'a, A>,
+}
+
+impl<'a, A: Alphabet> Alteration<'a, A> {
+    /// Get the first of the regular expression alternative.
+    pub fn first(&'a self) -> Regex<'a, A> {
+        Regex { kind: self.first }
+    }
+
+    /// Get the second of the regular expression alternative.
+    pub fn second(&'a self) -> Regex<'a, A> {
+        Regex { kind: self.second }
     }
 }
 
@@ -313,9 +374,37 @@ impl<'a, A: Alphabet> PartialEq<Range<A>> for &'a Range<A> {
     }
 }
 
+fn order_alternatives<'a, A: Alphabet>(
+    arena: &'a Arena<RegexKind<'a, A>>,
+    lhs: &'a RegexKind<'a, A>,
+    rhs: &'a RegexKind<'a, A>,
+) -> (&'a RegexKind<'a, A>, &'a RegexKind<'a, A>) {
+    if let RegexKind::Alteration(alt) = lhs {
+        let first =
+            if alt.first < rhs { alt.first } else { rhs };
+        let (second, third) = if alt.second < rhs {
+            (alt.second, rhs)
+        } else {
+            (rhs, alt.second)
+        };
+        (
+            first,
+            arena.alloc(RegexKind::Alteration(Alteration {
+                first: second,
+                second: third,
+            })),
+        )
+    } else if lhs < rhs {
+        (lhs, rhs)
+    } else {
+        (rhs, lhs)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::iter;
 
     #[test]
     fn empty_regex_has_kind_empty() {
@@ -435,5 +524,76 @@ mod test {
         let sut = ctx.repetition(class);
 
         assert_matches!(sut.kind(), &RegexKind::Empty);
+    }
+
+    #[test]
+    fn alteration_with_empty_class_is_other_value() {
+        let ctx = RegexContext::<char>::new();
+        let empty_class = ctx.class(Vec::new());
+        let empty = ctx.empty();
+        let neg_empty = ctx.complement(empty);
+
+        let sut = ctx.alteration(empty_class, neg_empty);
+
+        assert_matches!(sut.kind(), RegexKind::Complement(_));
+    }
+
+    #[test]
+    fn alteration_with_complement_of_empty_class_is_complement_of_empty_class() {
+        let ctx = RegexContext::<char>::new();
+        let empty_class = ctx.class(Vec::new());
+        let empty = ctx.empty();
+        let neg_empty = ctx.complement(empty_class);
+
+        let sut = ctx.alteration(empty, neg_empty);
+
+        assert_matches!(sut.kind(), RegexKind::Complement(complement) => {
+            assert_matches!(complement.inner, RegexKind::Class(class) => {
+                assert!(class.is_empty());
+            })
+        });
+    }
+
+    #[test]
+    fn alteration_with_equal_terms_is_that_term() {
+        let ctx = RegexContext::new();
+        let expected = vec![Range::new('a', 'c')];
+        let class1 = ctx.class(expected.clone());
+        let class2 = ctx.class(expected.clone());
+
+        let sut = ctx.alteration(class1, class2);
+
+        assert_matches!(sut.kind(), RegexKind::Class(class) => {
+            let ranges: Vec<Range<_>> = class.ranges().collect();
+            assert_eq!(ranges, expected);
+        });
+    }
+
+    #[test]
+    fn alteration_is_commutative() {
+        let ctx = RegexContext::new();
+        let class = ctx.class(iter::once(Range::new('a', 'c')));
+        let neg_class = ctx.complement(ctx.class(iter::once(Range::new('f', 'z'))));
+
+        let sut1 = ctx.alteration(class.clone(), neg_class.clone());
+        let sut2 = ctx.alteration(neg_class, class);
+
+        assert_eq!(sut1, sut2);
+    }
+
+    #[test]
+    fn alteration_is_associative() {
+        let ctx = RegexContext::new();
+        let class = ctx.class(iter::once(Range::new('a', 'c')));
+        let neg_class = ctx.complement(ctx.class(iter::once(Range::new('f', 'z'))));
+        let rep_class = ctx.repetition(ctx.class(iter::once(Range::new('A', 'Z'))));
+
+        let sut1 = ctx.alteration(
+            ctx.alteration(class.clone(), neg_class.clone()),
+            rep_class.clone(),
+        );
+        let sut2 = ctx.alteration(class, ctx.alteration(neg_class, rep_class));
+
+        assert_eq!(sut1, sut2);
     }
 }
