@@ -21,7 +21,7 @@
 //! directly from a `RegexKind<A>`. The required use of factory methods allows for
 //! mataining the regular expressons in cannonical form.
 
-use std::fmt::Debug;
+use std::fmt::{self, Debug, Display};
 use std::iter::FromIterator;
 
 use alphabet::Alphabet;
@@ -95,7 +95,7 @@ impl<'a, A: Alphabet + Debug> RegexContext<'a, A> {
         Regex { kind }
     }
 
-    /// Create an alteration `Regex`.
+    /// Create an alteration (or logical-or) `Regex`.
     ///
     /// The alteration regular expression matches either the `lhs` regular
     /// expression or the `rhs` regular expression.
@@ -110,7 +110,10 @@ impl<'a, A: Alphabet + Debug> RegexContext<'a, A> {
             return lhs;
         }
 
-        let (first, second) = order_alternatives(&self.arena, lhs.kind, rhs.kind);
+        let (first, second) = order_operands(lhs.kind, rhs.kind, |first, second| {
+            self.arena
+                .alloc(RegexKind::Alteration(Alteration { first, second }))
+        });
 
         let kind = self.arena
             .alloc(RegexKind::Alteration(Alteration { first, second }));
@@ -118,9 +121,28 @@ impl<'a, A: Alphabet + Debug> RegexContext<'a, A> {
         Regex { kind }
     }
 
-    /// Not yet implemented.
-    pub fn and(&self) -> Regex<A> {
-        unimplemented!()
+    /// Create a logical-and `Regex`.
+    ///
+    /// The and regular expression matches if both the `lhs` regular
+    /// expression and the `rhs` regular expressions match.
+    pub fn and(&'a self, lhs: Regex<'a, A>, rhs: Regex<'a, A>) -> Regex<A> {
+        if lhs.kind.is_null() || rhs.kind.is_complement_null() {
+            return lhs;
+        }
+        if rhs.kind.is_null() || lhs.kind.is_complement_null() {
+            return rhs;
+        }
+        if lhs.kind == rhs.kind {
+            return lhs;
+        }
+
+        let (first, second) = order_operands(lhs.kind, rhs.kind, |first, second| {
+            self.arena.alloc(RegexKind::And(And { first, second }))
+        });
+
+        let kind = self.arena.alloc(RegexKind::And(And { first, second }));
+
+        Regex { kind }
     }
 
     /// Create a complement (or negation) `Regex`.
@@ -187,8 +209,9 @@ pub enum RegexKind<'a, A: 'a + Alphabet> {
     /// expressions.
     Alteration(Alteration<'a, A>),
 
-    /// Not yet implemented.
-    And,
+    /// A regular expression which matches both of two different regular
+    /// expressions.
+    And(And<'a, A>),
 
     /// A regular expression which matches the complement (or negation) of a different
     /// regular expression.
@@ -212,6 +235,32 @@ impl<'a, A: Alphabet + Debug> RegexKind<'a, A> {
             complement.inner.is_null()
         } else {
             false
+        }
+    }
+
+    fn binary_operands(&self) -> Option<(&'a RegexKind<'a, A>, &'a RegexKind<'a, A>)> {
+        use self::RegexKind::*;
+
+        match self {
+            Alteration(alt) => Some((alt.first, alt.second)),
+            And(and) => Some((and.first, and.second)),
+            _ => None,
+        }
+    }
+}
+
+impl<'a, A: Alphabet> Display for RegexKind<'a, A> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::RegexKind::*;
+
+        match self {
+            Empty => write!(f, "Empty"),
+            Class(_) => write!(f, "Class{{...}}"),
+            Concat => write!(f, "Concat(not yet implemented)"),
+            Repetition(rep) => write!(f, "Repetition({})", rep.inner),
+            Alteration(alt) => write!(f, "Alteration({}, {})", alt.first, alt.second),
+            And(and) => write!(f, "And({}, {})", and.first, and.second),
+            Complement(comp) => write!(f, "Complement({})", comp.inner),
         }
     }
 }
@@ -297,6 +346,26 @@ impl<'a, A: Alphabet> Alteration<'a, A> {
     }
 }
 
+/// A regular expressions holder for regular expressions used as
+/// arguments to the `and` operation.
+#[derive(Debug, PartialEq, PartialOrd)]
+pub struct And<'a, A: 'a + Alphabet> {
+    first: &'a RegexKind<'a, A>,
+    second: &'a RegexKind<'a, A>,
+}
+
+impl<'a, A: Alphabet> And<'a, A> {
+    /// Get the first of the regular expressions being anded.
+    pub fn first(&'a self) -> Regex<'a, A> {
+        Regex { kind: self.first }
+    }
+
+    /// Get the second of the regular expressions being anded.
+    pub fn second(&'a self) -> Regex<'a, A> {
+        Regex { kind: self.second }
+    }
+}
+
 /// An iterator over the closed ranges of a class.
 ///
 /// This is the return type of the `Class<A>::ranges()` method.
@@ -374,26 +443,27 @@ impl<'a, A: Alphabet> PartialEq<Range<A>> for &'a Range<A> {
     }
 }
 
-fn order_alternatives<'a, A: Alphabet>(
-    arena: &'a Arena<RegexKind<'a, A>>,
+// This function is responsible for ordering the operands to a communtiative and
+// associative binary operation into a cannonical, lexographical order.
+fn order_operands<'a, A, F>(
     lhs: &'a RegexKind<'a, A>,
     rhs: &'a RegexKind<'a, A>,
-) -> (&'a RegexKind<'a, A>, &'a RegexKind<'a, A>) {
-    if let RegexKind::Alteration(alt) = lhs {
-        let first =
-            if alt.first < rhs { alt.first } else { rhs };
-        let (second, third) = if alt.second < rhs {
-            (alt.second, rhs)
+    factory: F,
+) -> (&'a RegexKind<'a, A>, &'a RegexKind<'a, A>)
+where
+    A: Alphabet + Debug,
+    F: Fn(&'a RegexKind<'a, A>, &'a RegexKind<'a, A>) -> &'a RegexKind<'a, A>,
+{
+    if let Some((inner_first, inner_second)) = lhs.binary_operands() {
+        let (first, second, third) = if rhs < inner_first {
+            (rhs, inner_first, inner_second)
+        } else if rhs < inner_second {
+            (inner_first, rhs, inner_second)
         } else {
-            (rhs, alt.second)
+            (inner_first, inner_second, rhs)
         };
-        (
-            first,
-            arena.alloc(RegexKind::Alteration(Alteration {
-                first: second,
-                second: third,
-            })),
-        )
+
+        (first, factory(second, third))
     } else if lhs < rhs {
         (lhs, rhs)
     } else {
@@ -593,6 +663,72 @@ mod test {
             rep_class.clone(),
         );
         let sut2 = ctx.alteration(class, ctx.alteration(neg_class, rep_class));
+
+        assert_eq!(sut1, sut2);
+    }
+
+    #[test]
+    fn and_with_empty_class_is_empty_class() {
+        let ctx = RegexContext::<char>::new();
+        let empty_class = ctx.class(Vec::new());
+        let empty = ctx.empty();
+        let neg_empty = ctx.complement(empty);
+
+        let sut = ctx.and(empty_class, neg_empty);
+
+        assert_matches!(sut.kind(), RegexKind::Class(class)=> {
+            assert!(class.is_empty())
+        });
+    }
+
+    #[test]
+    fn and_with_complement_of_empty_class_is_other_value() {
+        let ctx = RegexContext::<char>::new();
+        let empty_class = ctx.class(Vec::new());
+        let empty = ctx.empty();
+        let neg_empty = ctx.complement(empty_class);
+
+        let sut = ctx.and(empty, neg_empty);
+
+        assert_matches!(sut.kind(), RegexKind::Empty);
+    }
+
+    #[test]
+    fn and_with_equal_terms_is_that_term() {
+        let ctx = RegexContext::new();
+        let expected = vec![Range::new('a', 'c')];
+        let class1 = ctx.class(expected.clone());
+        let class2 = ctx.class(expected.clone());
+
+        let sut = ctx.and(class1, class2);
+
+        assert_matches!(sut.kind(), RegexKind::Class(class) => {
+            let ranges: Vec<Range<_>> = class.ranges().collect();
+            assert_eq!(ranges, expected);
+        });
+    }
+
+    #[test]
+    fn and_is_commutative() {
+        let ctx = RegexContext::new();
+        let class = ctx.class(iter::once(Range::new('a', 'c')));
+        let neg_class = ctx.complement(ctx.class(iter::once(Range::new('f', 'z'))));
+
+        let sut1 = ctx.and(class.clone(), neg_class.clone());
+        let sut2 = ctx.and(neg_class, class);
+
+        assert_eq!(sut1, sut2);
+    }
+
+    #[test]
+    fn and_is_associative() {
+        let ctx = RegexContext::new();
+        let class = ctx.class(iter::once(Range::new('a', 'c')));
+        let neg_class = ctx.complement(ctx.class(iter::once(Range::new('f', 'z'))));
+        let rep_class = ctx.repetition(ctx.class(iter::once(Range::new('A', 'Z'))));
+
+        let sut1 = ctx.and(ctx.and(class.clone(), neg_class.clone()), rep_class.clone());
+        let sut2 = ctx.and(class, ctx.and(neg_class, rep_class));
 
         assert_eq!(sut1, sut2);
     }
