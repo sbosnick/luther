@@ -524,19 +524,37 @@ where
     G: Fn(&'a RegexKind<'a, A>) -> Option<(&'a RegexKind<'a, A>, &'a RegexKind<'a, A>)>,
 {
     if let Some((inner_first, inner_second)) = get_operands(lhs) {
-        let (first, second, third) = if rhs < inner_first {
-            (rhs, inner_first, inner_second)
-        } else if rhs < inner_second {
-            (inner_first, rhs, inner_second)
-        } else {
-            (inner_first, inner_second, rhs)
-        };
+        let (first, second, third) = order_third_operand(inner_first, inner_second, rhs);
+
+        (first, factory(second, third))
+    } else if let Some((inner_first, inner_second)) = get_operands(rhs) {
+        let (first, second, third) = order_third_operand(inner_first, inner_second, lhs);
 
         (first, factory(second, third))
     } else if lhs < rhs {
         (lhs, rhs)
     } else {
         (rhs, lhs)
+    }
+}
+
+// This function orders 'third' with respect to 'first' and 'second' assuming
+// that 'first' and 'second' are already ordered with respect to each other.
+fn order_third_operand<'a, A: Alphabet>(
+    first: &'a RegexKind<'a, A>,
+    second: &'a RegexKind<'a, A>,
+    third: &'a RegexKind<'a, A>,
+) -> (
+    &'a RegexKind<'a, A>,
+    &'a RegexKind<'a, A>,
+    &'a RegexKind<'a, A>,
+) {
+    if third < first {
+        (third, first, second)
+    } else if third < second {
+        (first, third, second)
+    } else {
+        (first, second, third)
     }
 }
 
@@ -752,6 +770,22 @@ mod test {
             rep_class.clone(),
         );
         let sut2 = ctx.alternation(class, ctx.alternation(neg_class, rep_class));
+
+        assert_eq!(sut1, sut2);
+    }
+
+    #[test]
+    fn alternation_re_orders_terms_for_associative_simplification() {
+        let ctx = RegexContext::new();
+        let first = ctx.class(iter::once(Range::new('a', 'c')));
+        let second = ctx.empty();
+        let third = ctx.repetition(ctx.class(iter::once(Range::new('d', 'f'))));
+
+        let sut1 = ctx.alternation(
+            first.clone(),
+            ctx.alternation(second.clone(), third.clone()),
+        );
+        let sut2 = ctx.alternation(ctx.alternation(first, second), third);
 
         assert_eq!(sut1, sut2);
     }
