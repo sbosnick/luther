@@ -121,11 +121,11 @@ impl<'a, A: Alphabet + Debug> RegexContext<'a, A> {
         Regex { kind }
     }
 
-    /// Create an alteration (or logical-or) `Regex`.
+    /// Create an alternation (or logical-or) `Regex`.
     ///
-    /// The alteration regular expression matches either the `lhs` regular
+    /// The alternation regular expression matches either the `lhs` regular
     /// expression or the `rhs` regular expression.
-    pub fn alteration(&'a self, lhs: Regex<'a, A>, rhs: Regex<'a, A>) -> Regex<A> {
+    pub fn alternation(&'a self, lhs: Regex<'a, A>, rhs: Regex<'a, A>) -> Regex<A> {
         if lhs.kind.is_null() || rhs.kind.is_complement_null() {
             return rhs;
         }
@@ -139,22 +139,22 @@ impl<'a, A: Alphabet + Debug> RegexContext<'a, A> {
         let (first, second) = order_operands(
             lhs.kind,
             rhs.kind,
-            |f, s| self.make_alteration(f, s),
-            get_alteration_operands,
+            |f, s| self.make_alternation(f, s),
+            get_alternation_operands,
         );
 
         Regex {
-            kind: self.make_alteration(first, second),
+            kind: self.make_alternation(first, second),
         }
     }
 
-    fn make_alteration(
+    fn make_alternation(
         &'a self,
         first: &'a RegexKind<'a, A>,
         second: &'a RegexKind<'a, A>,
     ) -> &'a RegexKind<'a, A> {
         self.arena
-            .alloc(RegexKind::Alteration(Alteration { first, second }))
+            .alloc(RegexKind::Alternation(Alternation { first, second }))
     }
 
     /// Create a logical-and `Regex`.
@@ -254,7 +254,7 @@ pub enum RegexKind<'a, A: 'a + Alphabet> {
 
     /// A regular expression which matches either of two different regular
     /// expressions.
-    Alteration(Alteration<'a, A>),
+    Alternation(Alternation<'a, A>),
 
     /// A regular expression which matches both of two different regular
     /// expressions.
@@ -305,7 +305,7 @@ impl<'a, A: Alphabet> Display for RegexKind<'a, A> {
             Class(_) => write!(f, "Class{{...}}"),
             Concat(concat) => write!(f, "Concat({}, {})", concat.first, concat.second),
             Repetition(rep) => write!(f, "Repetition({})", rep.inner),
-            Alteration(alt) => write!(f, "Alteration({}, {})", alt.first, alt.second),
+            Alternation(alt) => write!(f, "Alternation({}, {})", alt.first, alt.second),
             And(and) => write!(f, "And({}, {})", and.first, and.second),
             Complement(comp) => write!(f, "Complement({})", comp.inner),
         }
@@ -374,14 +374,14 @@ impl<'a, A: Alphabet> Repetition<'a, A> {
 }
 
 /// A regular expression holder for regular expressions used as
-/// alternatives (through alteration).
+/// alternatives (through alternation).
 #[derive(Debug, PartialEq, PartialOrd)]
-pub struct Alteration<'a, A: 'a + Alphabet> {
+pub struct Alternation<'a, A: 'a + Alphabet> {
     first: &'a RegexKind<'a, A>,
     second: &'a RegexKind<'a, A>,
 }
 
-impl<'a, A: Alphabet> Alteration<'a, A> {
+impl<'a, A: Alphabet> Alternation<'a, A> {
     /// Get the first of the regular expression alternative.
     pub fn first(&'a self) -> Regex<'a, A> {
         Regex { kind: self.first }
@@ -540,10 +540,10 @@ where
     }
 }
 
-fn get_alteration_operands<'a, A: Alphabet>(
+fn get_alternation_operands<'a, A: Alphabet>(
     kind: &'a RegexKind<'a, A>,
 ) -> Option<(&'a RegexKind<'a, A>, &'a RegexKind<'a, A>)> {
-    if let RegexKind::Alteration(alt) = kind {
+    if let RegexKind::Alternation(alt) = kind {
         Some((alt.first, alt.second))
     } else {
         None
@@ -686,25 +686,25 @@ mod test {
     }
 
     #[test]
-    fn alteration_with_empty_class_is_other_value() {
+    fn alternation_with_empty_class_is_other_value() {
         let ctx = RegexContext::<char>::new();
         let empty_class = ctx.class(Vec::new());
         let empty = ctx.empty();
         let neg_empty = ctx.complement(empty);
 
-        let sut = ctx.alteration(empty_class, neg_empty);
+        let sut = ctx.alternation(empty_class, neg_empty);
 
         assert_matches!(sut.kind(), RegexKind::Complement(_));
     }
 
     #[test]
-    fn alteration_with_complement_of_empty_class_is_complement_of_empty_class() {
+    fn alternation_with_complement_of_empty_class_is_complement_of_empty_class() {
         let ctx = RegexContext::<char>::new();
         let empty_class = ctx.class(Vec::new());
         let empty = ctx.empty();
         let neg_empty = ctx.complement(empty_class);
 
-        let sut = ctx.alteration(empty, neg_empty);
+        let sut = ctx.alternation(empty, neg_empty);
 
         assert_matches!(sut.kind(), RegexKind::Complement(complement) => {
             assert_matches!(complement.inner, RegexKind::Class(class) => {
@@ -714,13 +714,13 @@ mod test {
     }
 
     #[test]
-    fn alteration_with_equal_terms_is_that_term() {
+    fn alternation_with_equal_terms_is_that_term() {
         let ctx = RegexContext::new();
         let expected = vec![Range::new('a', 'c')];
         let class1 = ctx.class(expected.clone());
         let class2 = ctx.class(expected.clone());
 
-        let sut = ctx.alteration(class1, class2);
+        let sut = ctx.alternation(class1, class2);
 
         assert_matches!(sut.kind(), RegexKind::Class(class) => {
             let ranges: Vec<Range<_>> = class.ranges().collect();
@@ -729,29 +729,29 @@ mod test {
     }
 
     #[test]
-    fn alteration_is_commutative() {
+    fn alternation_is_commutative() {
         let ctx = RegexContext::new();
         let class = ctx.class(iter::once(Range::new('a', 'c')));
         let neg_class = ctx.complement(ctx.class(iter::once(Range::new('f', 'z'))));
 
-        let sut1 = ctx.alteration(class.clone(), neg_class.clone());
-        let sut2 = ctx.alteration(neg_class, class);
+        let sut1 = ctx.alternation(class.clone(), neg_class.clone());
+        let sut2 = ctx.alternation(neg_class, class);
 
         assert_eq!(sut1, sut2);
     }
 
     #[test]
-    fn alteration_is_associative() {
+    fn alternation_is_associative() {
         let ctx = RegexContext::new();
         let class = ctx.class(iter::once(Range::new('a', 'c')));
         let neg_class = ctx.complement(ctx.class(iter::once(Range::new('f', 'z'))));
         let rep_class = ctx.repetition(ctx.class(iter::once(Range::new('A', 'Z'))));
 
-        let sut1 = ctx.alteration(
-            ctx.alteration(class.clone(), neg_class.clone()),
+        let sut1 = ctx.alternation(
+            ctx.alternation(class.clone(), neg_class.clone()),
             rep_class.clone(),
         );
-        let sut2 = ctx.alteration(class, ctx.alteration(neg_class, rep_class));
+        let sut2 = ctx.alternation(class, ctx.alternation(neg_class, rep_class));
 
         assert_eq!(sut1, sut2);
     }
@@ -829,10 +829,10 @@ mod test {
         let class2 = ctx.complement(ctx.class(iter::once(Range::new('f', 'm'))));
         let class3 = ctx.class(iter::once(Range::new('o', 'z')));
 
-        let sut = ctx.and(ctx.alteration(class1, class2), class3);
+        let sut = ctx.and(ctx.alternation(class1, class2), class3);
 
         assert_matches!(sut.kind(), RegexKind::And(and) => {
-            assert_matches!(and.second().kind(), RegexKind::Alteration(_));
+            assert_matches!(and.second().kind(), RegexKind::Alternation(_));
         });
     }
 
