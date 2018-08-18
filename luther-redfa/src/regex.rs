@@ -75,9 +75,35 @@ impl<'a, A: Alphabet + Debug> RegexContext<'a, A> {
         }
     }
 
-    /// Not yet implemented.
-    pub fn concat(&self) -> Regex<A> {
-        unimplemented!()
+    /// Create a concatination `Regex`.
+    ///
+    /// The concatination regular expression matches the `lhs` regular
+    /// expression followed by the `rhs` regular expression.
+    pub fn concat(&'a self, lhs: Regex<'a, A>, rhs: Regex<'a, A>) -> Regex<A> {
+        if lhs.kind.is_null() || rhs.kind.is_empty_string() {
+            return lhs;
+        };
+        if rhs.kind.is_null() || lhs.kind.is_empty_string() {
+            return rhs;
+        };
+
+        let (first, second) = match lhs.kind {
+            RegexKind::Concat(concat) => (concat.first, self.make_concat(concat.second, rhs.kind)),
+            _ => (lhs.kind, rhs.kind),
+        };
+
+        Regex {
+            kind: self.make_concat(first, second),
+        }
+    }
+
+    fn make_concat(
+        &'a self,
+        first: &'a RegexKind<'a, A>,
+        second: &'a RegexKind<'a, A>,
+    ) -> &'a RegexKind<'a, A> {
+        self.arena
+            .alloc(RegexKind::Concat(Concat { first, second }))
     }
 
     /// Create a repetition `Regex`.
@@ -110,15 +136,25 @@ impl<'a, A: Alphabet + Debug> RegexContext<'a, A> {
             return lhs;
         }
 
-        let (first, second) = order_operands(lhs.kind, rhs.kind, |first, second| {
-            self.arena
-                .alloc(RegexKind::Alteration(Alteration { first, second }))
-        });
+        let (first, second) = order_operands(
+            lhs.kind,
+            rhs.kind,
+            |f, s| self.make_alteration(f, s),
+            get_alteration_operands,
+        );
 
-        let kind = self.arena
-            .alloc(RegexKind::Alteration(Alteration { first, second }));
+        Regex {
+            kind: self.make_alteration(first, second),
+        }
+    }
 
-        Regex { kind }
+    fn make_alteration(
+        &'a self,
+        first: &'a RegexKind<'a, A>,
+        second: &'a RegexKind<'a, A>,
+    ) -> &'a RegexKind<'a, A> {
+        self.arena
+            .alloc(RegexKind::Alteration(Alteration { first, second }))
     }
 
     /// Create a logical-and `Regex`.
@@ -136,13 +172,24 @@ impl<'a, A: Alphabet + Debug> RegexContext<'a, A> {
             return lhs;
         }
 
-        let (first, second) = order_operands(lhs.kind, rhs.kind, |first, second| {
-            self.arena.alloc(RegexKind::And(And { first, second }))
-        });
+        let (first, second) = order_operands(
+            lhs.kind,
+            rhs.kind,
+            |first, second| self.make_and(first, second),
+            get_and_operands,
+        );
 
-        let kind = self.arena.alloc(RegexKind::And(And { first, second }));
+        Regex {
+            kind: self.make_and(first, second),
+        }
+    }
 
-        Regex { kind }
+    fn make_and(
+        &'a self,
+        first: &'a RegexKind<'a, A>,
+        second: &'a RegexKind<'a, A>,
+    ) -> &'a RegexKind<'a, A> {
+        self.arena.alloc(RegexKind::And(And { first, second }))
     }
 
     /// Create a complement (or negation) `Regex`.
@@ -196,8 +243,8 @@ pub enum RegexKind<'a, A: 'a + Alphabet> {
     /// nothing.
     Class(Class<A>),
 
-    /// Not yet implemented.
-    Concat,
+    /// A regular expression that matches two other regular expressions in sequence.
+    Concat(Concat<'a, A>),
 
     /// A regular expression which matches 0 or more instances of a different
     /// regular expression.
@@ -238,13 +285,13 @@ impl<'a, A: Alphabet + Debug> RegexKind<'a, A> {
         }
     }
 
-    fn binary_operands(&self) -> Option<(&'a RegexKind<'a, A>, &'a RegexKind<'a, A>)> {
+    fn is_empty_string(&self) -> bool {
         use self::RegexKind::*;
 
-        match self {
-            Alteration(alt) => Some((alt.first, alt.second)),
-            And(and) => Some((and.first, and.second)),
-            _ => None,
+        if let Empty = self {
+            true
+        } else {
+            false
         }
     }
 }
@@ -256,7 +303,7 @@ impl<'a, A: Alphabet> Display for RegexKind<'a, A> {
         match self {
             Empty => write!(f, "Empty"),
             Class(_) => write!(f, "Class{{...}}"),
-            Concat => write!(f, "Concat(not yet implemented)"),
+            Concat(concat) => write!(f, "Concat({}, {})", concat.first, concat.second),
             Repetition(rep) => write!(f, "Repetition({})", rep.inner),
             Alteration(alt) => write!(f, "Alteration({}, {})", alt.first, alt.second),
             And(and) => write!(f, "And({}, {})", and.first, and.second),
@@ -366,6 +413,26 @@ impl<'a, A: Alphabet> And<'a, A> {
     }
 }
 
+/// A regular expression holder for regular expressions being
+/// concatenated.
+#[derive(Debug, PartialEq, PartialOrd)]
+pub struct Concat<'a, A: 'a + Alphabet> {
+    first: &'a RegexKind<'a, A>,
+    second: &'a RegexKind<'a, A>,
+}
+
+impl<'a, A: Alphabet> Concat<'a, A> {
+    /// Gets the first of the regular expressons being concatenated.
+    pub fn first(&'a self) -> Regex<'a, A> {
+        Regex { kind: self.first }
+    }
+
+    /// Get the second of the regular expressions being concatenated.
+    pub fn second(&'a self) -> Regex<'a, A> {
+        Regex { kind: self.second }
+    }
+}
+
 /// An iterator over the closed ranges of a class.
 ///
 /// This is the return type of the `Class<A>::ranges()` method.
@@ -445,16 +512,18 @@ impl<'a, A: Alphabet> PartialEq<Range<A>> for &'a Range<A> {
 
 // This function is responsible for ordering the operands to a communtiative and
 // associative binary operation into a cannonical, lexographical order.
-fn order_operands<'a, A, F>(
+fn order_operands<'a, A, F, G>(
     lhs: &'a RegexKind<'a, A>,
     rhs: &'a RegexKind<'a, A>,
     factory: F,
+    get_operands: G,
 ) -> (&'a RegexKind<'a, A>, &'a RegexKind<'a, A>)
 where
     A: Alphabet + Debug,
     F: Fn(&'a RegexKind<'a, A>, &'a RegexKind<'a, A>) -> &'a RegexKind<'a, A>,
+    G: Fn(&'a RegexKind<'a, A>) -> Option<(&'a RegexKind<'a, A>, &'a RegexKind<'a, A>)>,
 {
-    if let Some((inner_first, inner_second)) = lhs.binary_operands() {
+    if let Some((inner_first, inner_second)) = get_operands(lhs) {
         let (first, second, third) = if rhs < inner_first {
             (rhs, inner_first, inner_second)
         } else if rhs < inner_second {
@@ -468,6 +537,26 @@ where
         (lhs, rhs)
     } else {
         (rhs, lhs)
+    }
+}
+
+fn get_alteration_operands<'a, A: Alphabet>(
+    kind: &'a RegexKind<'a, A>,
+) -> Option<(&'a RegexKind<'a, A>, &'a RegexKind<'a, A>)> {
+    if let RegexKind::Alteration(alt) = kind {
+        Some((alt.first, alt.second))
+    } else {
+        None
+    }
+}
+
+fn get_and_operands<'a, A: Alphabet>(
+    kind: &'a RegexKind<'a, A>,
+) -> Option<(&'a RegexKind<'a, A>, &'a RegexKind<'a, A>)> {
+    if let RegexKind::And(and) = kind {
+        Some((and.first, and.second))
+    } else {
+        None
     }
 }
 
@@ -729,6 +818,60 @@ mod test {
 
         let sut1 = ctx.and(ctx.and(class.clone(), neg_class.clone()), rep_class.clone());
         let sut2 = ctx.and(class, ctx.and(neg_class, rep_class));
+
+        assert_eq!(sut1, sut2);
+    }
+
+    #[test]
+    fn and_with_alternation_does_not_associate() {
+        let ctx = RegexContext::new();
+        let class1 = ctx.class(iter::once(Range::new('a', 'c')));
+        let class2 = ctx.complement(ctx.class(iter::once(Range::new('f', 'm'))));
+        let class3 = ctx.class(iter::once(Range::new('o', 'z')));
+
+        let sut = ctx.and(ctx.alteration(class1, class2), class3);
+
+        assert_matches!(sut.kind(), RegexKind::And(and) => {
+            assert_matches!(and.second().kind(), RegexKind::Alteration(_));
+        });
+    }
+
+    #[test]
+    fn concat_with_empty_class_is_empty_class() {
+        let ctx = RegexContext::<char>::new();
+        let empty_class = ctx.class(Vec::new());
+        let neg_empty = ctx.complement(ctx.empty());
+
+        let sut = ctx.concat(empty_class, neg_empty);
+
+        assert_matches!(sut.kind(), RegexKind::Class(class)=> {
+            assert!(class.is_empty())
+        });
+    }
+
+    #[test]
+    fn concat_with_empty_string_is_other_value() {
+        let ctx = RegexContext::new();
+        let class = ctx.class(iter::once(Range::new('a', 'c')));
+        let empty = ctx.empty();
+
+        let sut = ctx.concat(empty, class);
+
+        assert_matches!(sut.kind(), RegexKind::Class(_));
+    }
+
+    #[test]
+    fn concat_is_associative() {
+        let ctx = RegexContext::new();
+        let class = ctx.class(iter::once(Range::new('a', 'c')));
+        let neg_class = ctx.complement(ctx.class(iter::once(Range::new('f', 'z'))));
+        let rep_class = ctx.repetition(ctx.class(iter::once(Range::new('A', 'Z'))));
+
+        let sut1 = ctx.concat(
+            ctx.concat(class.clone(), neg_class.clone()),
+            rep_class.clone(),
+        );
+        let sut2 = ctx.concat(class, ctx.concat(neg_class, rep_class));
 
         assert_eq!(sut1, sut2);
     }
