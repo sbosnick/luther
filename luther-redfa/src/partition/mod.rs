@@ -505,6 +505,12 @@ impl<U: Alphabet + Debug> PartitionSet<U> {
     pub fn is_empty(&self) -> bool {
         self.map.is_empty()
     }
+
+    pub fn union(&self, other: &PartitionSet<U>) -> PartitionSet<U> {
+        PartitionSet {
+            map: self.map.union(&other.map),
+        }
+    }
 }
 
 impl<U: Alphabet> FromIterator<Range<U>> for PartitionSet<U> {

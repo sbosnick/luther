@@ -71,8 +71,12 @@ impl<'a, A: Alphabet + Debug> RegexContext<'a, A> {
     {
         let class = ranges.into_iter().collect();
         Regex {
-            kind: self.arena.alloc(RegexKind::Class(class)),
+            kind: self.make_class(class),
         }
+    }
+
+    fn make_class(&'a self, class: Class<A>) -> &'a RegexKind<'a, A> {
+        self.arena.alloc(RegexKind::Class(class))
     }
 
     /// Create a concatination `Regex`.
@@ -134,6 +138,11 @@ impl<'a, A: Alphabet + Debug> RegexContext<'a, A> {
         }
         if lhs.kind == rhs.kind {
             return lhs;
+        }
+        if let (RegexKind::Class(left), RegexKind::Class(right)) = (lhs.kind, rhs.kind) {
+            return Regex {
+                kind: self.make_class(left.union(right)),
+            };
         }
 
         let (first, second) = order_operands(
@@ -332,6 +341,12 @@ impl<A: Alphabet + Debug> Class<A> {
     /// Check if the subset of `A` is empty.
     pub fn is_empty(&self) -> bool {
         self.set.is_empty()
+    }
+
+    fn union(&self, other: &Class<A>) -> Class<A> {
+        Class {
+            set: self.set.union(&other.set),
+        }
     }
 }
 
@@ -788,6 +803,18 @@ mod test {
         let sut2 = ctx.alternation(ctx.alternation(first, second), third);
 
         assert_eq!(sut1, sut2);
+    }
+
+    #[test]
+    fn alternation_of_classes_is_union_of_class_elements() {
+        let ctx = RegexContext::new();
+        let class1 = ctx.class(iter::once(Range::new('a', 'c')));
+        let class2 = ctx.class(iter::once(Range::new('f', 'm')));
+        let expected = ctx.class(vec![Range::new('a', 'c'), Range::new('f', 'm')]);
+
+        let sut = ctx.alternation(class1, class2);
+
+        assert_eq!(sut, expected);
     }
 
     #[test]
