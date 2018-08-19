@@ -205,14 +205,19 @@ impl<'a, A: Alphabet + Debug> RegexContext<'a, A> {
     ///
     /// The complement regular expression matches everything that the supplied
     /// `other` regular expression does not match.
-    pub fn complement(&self, other: Regex<'a, A>) -> Regex<A> {
-        let kind = if let RegexKind::Complement(complement) = other.kind {
-            complement.inner
-        } else {
-            self.arena
-                .alloc(RegexKind::Complement(Complement { inner: other.kind }))
+    pub fn complement(&'a self, other: Regex<'a, A>) -> Regex<A> {
+        let kind = match other.kind {
+            RegexKind::Complement(complement) => complement.inner,
+            RegexKind::Class(class) => self.make_class(class.complement()),
+            _ => self.make_complement(other.kind),
         };
+
         Regex { kind }
+    }
+
+    fn make_complement(&'a self, inner: &'a RegexKind<'a, A>) -> &'a RegexKind<'a, A> {
+        self.arena
+            .alloc(RegexKind::Complement(Complement { inner }))
     }
 }
 
@@ -287,10 +292,9 @@ impl<'a, A: Alphabet + Debug> RegexKind<'a, A> {
     fn is_complement_null(&self) -> bool {
         use self::RegexKind::*;
 
-        if let Complement(complement) = self {
-            complement.inner.is_null()
-        } else {
-            false
+        match self {
+            Class(class) if class.is_complement_empty() => true,
+            _ => false,
         }
     }
 
@@ -343,9 +347,21 @@ impl<A: Alphabet + Debug> Class<A> {
         self.set.is_empty()
     }
 
+    /// Check if the subset of `A` is the complement of the empty set
+    /// (i.e. it is every element in `A`).
+    pub fn is_complement_empty(&self) -> bool {
+        self.set.is_complement_empty()
+    }
+
     fn union(&self, other: &Class<A>) -> Class<A> {
         Class {
             set: self.set.union(&other.set),
+        }
+    }
+
+    fn complement(&self) -> Class<A> {
+        Class {
+            set: self.set.complement(),
         }
     }
 }
@@ -631,28 +647,6 @@ mod test {
     }
 
     #[test]
-    fn simple_complement_regex_has_kind_complement() {
-        let ctx = RegexContext::new();
-        let class = ctx.class(vec![Range::new('a', 'c')]);
-
-        let sut = ctx.complement(class);
-
-        assert_matches!(sut.kind(), &RegexKind::Complement(_));
-    }
-
-    #[test]
-    fn simple_complement_regex_round_trips_original_kind() {
-        let ctx = RegexContext::new();
-        let class = ctx.class(vec![Range::new('a', 'c')]);
-
-        let sut = ctx.complement(class);
-
-        assert_matches!(sut.kind(), &RegexKind::Complement(ref complement) => {
-            assert_matches!(complement.inner().kind(), &RegexKind::Class(_));
-        });
-    }
-
-    #[test]
     fn double_complement_regex_has_orginal_kind() {
         let ctx = RegexContext::new();
         let class = ctx.class(vec![Range::new('a', 'c')]);
@@ -661,6 +655,20 @@ mod test {
         let sut = ctx.complement(complement);
 
         assert_matches!(sut.kind(), &RegexKind::Class(_));
+    }
+
+    #[test]
+    fn complement_of_class_is_class_of_complement() {
+        let ctx = RegexContext::new();
+        let class = ctx.class(iter::once(Range::new('b', 'd')));
+        let expected = ctx.class(vec![
+            Range::new('\u{0}', 'a'),
+            Range::new('e', ::std::char::MAX),
+        ]);
+
+        let sut = ctx.complement(class);
+
+        assert_eq!(sut, expected);
     }
 
     #[test]
@@ -739,10 +747,8 @@ mod test {
 
         let sut = ctx.alternation(empty, neg_empty);
 
-        assert_matches!(sut.kind(), RegexKind::Complement(complement) => {
-            assert_matches!(complement.inner, RegexKind::Class(class) => {
-                assert!(class.is_empty());
-            })
+        assert_matches!(sut.kind(), RegexKind::Class(class) => {
+                assert!(class.is_complement_empty());
         });
     }
 
@@ -777,7 +783,10 @@ mod test {
     fn alternation_is_associative() {
         let ctx = RegexContext::new();
         let class = ctx.class(iter::once(Range::new('a', 'c')));
-        let neg_class = ctx.complement(ctx.class(iter::once(Range::new('f', 'z'))));
+        // this forced formulation avoids simplifications that are not the sut
+        let neg_class = Regex {
+            kind: ctx.make_complement(ctx.class(iter::once(Range::new('f', 'z'))).kind),
+        };
         let rep_class = ctx.repetition(ctx.class(iter::once(Range::new('A', 'Z'))));
 
         let sut1 = ctx.alternation(
@@ -887,8 +896,8 @@ mod test {
     fn and_with_alternation_does_not_associate() {
         let ctx = RegexContext::new();
         let class1 = ctx.class(iter::once(Range::new('a', 'c')));
-        let class2 = ctx.complement(ctx.class(iter::once(Range::new('f', 'm'))));
-        let class3 = ctx.class(iter::once(Range::new('o', 'z')));
+        let class2 = ctx.repetition(ctx.class(iter::once(Range::new('f', 'm'))));
+        let class3 = ctx.repetition(ctx.class(iter::once(Range::new('o', 'z'))));
 
         let sut = ctx.and(ctx.alternation(class1, class2), class3);
 

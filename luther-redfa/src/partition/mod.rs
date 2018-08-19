@@ -198,8 +198,21 @@ where
         }
     }
 
+    pub fn complement(&self) -> Self {
+        PartitionMap {
+            map: self.map
+                .iter()
+                .map(|(k, v)| (k.clone(), (!v).clone()))
+                .collect(),
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.map.len() == 1 && !self.map[&U::min_value()]
+    }
+
+    pub fn is_complement_empty(&self) -> bool {
+        self.map.len() == 1 && self.map[&U::min_value()]
     }
 }
 
@@ -506,9 +519,19 @@ impl<U: Alphabet + Debug> PartitionSet<U> {
         self.map.is_empty()
     }
 
+    pub fn is_complement_empty(&self) -> bool {
+        self.map.is_complement_empty()
+    }
+
     pub fn union(&self, other: &PartitionSet<U>) -> PartitionSet<U> {
         PartitionSet {
             map: self.map.union(&other.map),
+        }
+    }
+
+    pub fn complement(&self) -> PartitionSet<U> {
+        PartitionSet {
+            map: self.map.complement(),
         }
     }
 }
@@ -907,6 +930,20 @@ mod test {
     }
 
     #[test]
+    fn complement_partition_map_gets_expected_values() {
+        use self::TestAlpha::*;
+
+        let sut = TestPM::new(B..D, true, false);
+        let result = sut.complement();
+
+        assert!(*result.get(&A));
+        assert!(!*result.get(&B));
+        assert!(!*result.get(&C));
+        assert!(*result.get(&D));
+        assert!(*result.get(&E));
+    }
+
+    #[test]
     fn partion_map_from_ranges_has_expected_values() {
         let ranges = vec![
             Range::new(15u8, 25),
@@ -998,6 +1035,7 @@ mod test {
     enum PMOp {
         Split(u8),
         Union((Bound<u8>, Bound<u8>)),
+        Complement,
     }
 
     impl PMOp {
@@ -1011,6 +1049,7 @@ mod test {
                     arg
                 }
                 Union(range) => arg.union(&PartitionMap::new(*range, true, false)),
+                Complement => arg.complement(),
             }
         }
     }
@@ -1019,6 +1058,7 @@ mod test {
         let pmop_strategy = prop_oneof![
             2 => any::<u8>().prop_map(PMOp::Split),
             1 => arb_u8_range().prop_map(PMOp::Union),
+            1 => Just(PMOp::Complement),
         ];
 
         collection::vec(pmop_strategy.boxed(), ..10)
