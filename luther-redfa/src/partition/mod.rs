@@ -100,7 +100,12 @@ where
 
         PartitionMap { map }
     }
-
+}
+impl<U, V> PartitionMap<U, V>
+where
+    U: Alphabet,
+    V: Clone + Debug + PartialEq,
+{
     /// Gets the value associated with an element of U.
     pub fn get(&self, u: &U) -> &V {
         self.map
@@ -184,7 +189,7 @@ where
 
 impl<U> PartitionMap<U, bool>
 where
-    U: Alphabet + Debug,
+    U: Alphabet,
 {
     /// Produce the union of the current `PartitionMap` and another one.
     ///
@@ -415,12 +420,11 @@ impl<'a, U: 'a, L, R> Iterator for UnionIntervalIter<'a, U, L, R>
 where
     L: Iterator<Item = (&'a U, &'a bool)>,
     R: Iterator<Item = (&'a U, &'a bool)>,
-    U: Ord + Clone + Debug,
+    U: Ord + Clone,
 {
     type Item = (U, bool);
 
     fn next(&mut self) -> Option<Self::Item> {
-        #[derive(Debug)]
         enum Adv {
             Left,
             Right,
@@ -483,10 +487,7 @@ where
         match (key, value) {
             (Some(k), Some(v)) => Some((k, v)),
             (None, None) => None,
-            kv => panic!(
-                "Unexpect return value for UnionIntervalIter::next(): {:?}",
-                kv
-            ),
+            _ => panic!("Unexpect return value for UnionIntervalIter::next()"),
         }
     }
 }
@@ -510,7 +511,9 @@ impl<U: Alphabet + Debug> PartitionSet<U> {
             map: PartitionMap::new(range, true, false),
         }
     }
+}
 
+impl<U: Alphabet> PartitionSet<U> {
     pub fn contains(&self, u: &U) -> bool {
         self.map.get(u).clone()
     }

@@ -33,5 +33,8 @@ extern crate assert_matches;
 pub mod alphabet;
 pub mod regex;
 
+mod label;
 mod partition;
 mod range;
+
+pub use label::Label;

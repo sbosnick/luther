@@ -21,7 +21,7 @@
 //! directly from a `RegexKind<A>`. The required use of factory methods allows for
 //! mataining the regular expressons in cannonical form.
 
-use std::fmt::{self, Debug, Display};
+use std::fmt::{self, Display};
 use std::iter::FromIterator;
 
 use alphabet::Alphabet;
@@ -41,7 +41,7 @@ pub struct RegexContext<'a, A: 'a + Alphabet> {
     arena: Arena<RegexKind<'a, A>>,
 }
 
-impl<'a, A: Alphabet + Debug> RegexContext<'a, A> {
+impl<'a, A: Alphabet> RegexContext<'a, A> {
     /// Create a new `RegexContext`.
     pub fn new() -> RegexContext<'a, A> {
         RegexContext {
@@ -228,14 +228,14 @@ impl<'a, A: Alphabet + Debug> RegexContext<'a, A> {
 /// directly. It is also not possible to create a `Regex` from a `RegexKind` in
 /// order to allow `RegexContext` to maintain certain regular expressions in
 /// cannonical form.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub struct Regex<'a, A: 'a + Alphabet> {
     kind: &'a RegexKind<'a, A>,
 }
 
 impl<'a, A: Alphabet> Regex<'a, A> {
     /// Get the kind of the regular expression.
-    pub fn kind(&self) -> &RegexKind<'a, A> {
+    pub fn kind(&self) -> &'a RegexKind<'a, A> {
         &self.kind
     }
 }
@@ -279,7 +279,7 @@ pub enum RegexKind<'a, A: 'a + Alphabet> {
     Complement(Complement<'a, A>),
 }
 
-impl<'a, A: Alphabet + Debug> RegexKind<'a, A> {
+impl<'a, A: Alphabet> RegexKind<'a, A> {
     fn is_null(&self) -> bool {
         use self::RegexKind::*;
 
@@ -331,7 +331,7 @@ pub struct Class<A: Alphabet> {
     set: PartitionSet<A>,
 }
 
-impl<A: Alphabet + Debug> Class<A> {
+impl<A: Alphabet> Class<A> {
     /// Get an iterator over the closed ranges that make up the `Class`.
     ///
     /// The ranges returned by the iterator will be non-overlapping ranges
@@ -351,6 +351,11 @@ impl<A: Alphabet + Debug> Class<A> {
     /// (i.e. it is every element in `A`).
     pub fn is_complement_empty(&self) -> bool {
         self.set.is_complement_empty()
+    }
+
+    /// Check if the class contains the character `c`.
+    pub fn contains(&self, c: &A) -> bool {
+        self.set.contains(c)
     }
 
     fn union(&self, other: &Class<A>) -> Class<A> {
@@ -550,7 +555,7 @@ fn order_operands<'a, A, F, G>(
     get_operands: G,
 ) -> (&'a RegexKind<'a, A>, &'a RegexKind<'a, A>)
 where
-    A: Alphabet + Debug,
+    A: Alphabet,
     F: Fn(&'a RegexKind<'a, A>, &'a RegexKind<'a, A>) -> &'a RegexKind<'a, A>,
     G: Fn(&'a RegexKind<'a, A>) -> Option<(&'a RegexKind<'a, A>, &'a RegexKind<'a, A>)>,
 {
