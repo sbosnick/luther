@@ -11,16 +11,16 @@ use std::iter;
 use alphabet::Alphabet;
 use regex::{Regex, RegexContext, RegexKind};
 
-/// Label describes types that can be used to generate a deterministic
+/// StateLabel describes types that can be used to generate a deterministic
 /// finite automaton (DFA).
 ///
-/// The types that implement Label can be used to label the states of
+/// The types that implement StateLabel can be used to label the states of
 /// the generated DFA.
 ///
 /// This trait is sealed and cannot be implemented for types outside of
 /// `luther-redfa`.
-pub trait Label<'a, A: Alphabet>: private::Sealed {
-    /// Calculate the Brzozowski derivative of a `Label` with respect to
+pub trait StateLabel<'a, A: Alphabet>: private::Sealed {
+    /// Calculate the Brzozowski derivative of a `StateLabel` with respect to
     /// the characther `c` from the `Alphabet` `A`.
     fn derivative(&self, c: &A, ctx: &'a RegexContext<'a, A>) -> Self;
 
@@ -58,7 +58,7 @@ impl<'a, A: Alphabet> Nullable<'a, A> for Regex<'a, A> {
     }
 }
 
-impl<'a, A: Alphabet> Label<'a, A> for Regex<'a, A> {
+impl<'a, A: Alphabet> StateLabel<'a, A> for Regex<'a, A> {
     fn derivative(&self, c: &A, ctx: &'a RegexContext<'a, A>) -> Self {
         use self::RegexKind::*;
 

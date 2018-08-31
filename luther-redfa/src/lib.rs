@@ -37,4 +37,4 @@ mod label;
 mod partition;
 mod range;
 
-pub use label::Label;
+pub use label::StateLabel;
