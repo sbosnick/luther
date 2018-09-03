@@ -21,11 +21,11 @@
 //! directly from a `RegexKind<A>`. The required use of factory methods allows for
 //! mataining the regular expressons in cannonical form.
 
-use std::fmt::{self, Display};
+use std::fmt::{self, Debug, Display};
 use std::iter::FromIterator;
 
 use alphabet::Alphabet;
-use partition::{PartitionSet, PartitionSetRangeIter};
+use partition::{PartitionMap, PartitionSet, PartitionSetRangeIter};
 use typed_arena::Arena;
 
 /// A context for creating regular expressions.
@@ -228,7 +228,7 @@ impl<'a, A: Alphabet> RegexContext<'a, A> {
 /// directly. It is also not possible to create a `Regex` from a `RegexKind` in
 /// order to allow `RegexContext` to maintain certain regular expressions in
 /// cannonical form.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Regex<'a, A: 'a + Alphabet> {
     kind: &'a RegexKind<'a, A>,
 }
@@ -368,6 +368,13 @@ impl<A: Alphabet> Class<A> {
         Class {
             set: self.set.complement(),
         }
+    }
+
+    pub(crate) fn into_partition_map<V>(&self, in_value: V, out_value: V) -> PartitionMap<A, V>
+    where
+        V: Debug + Clone + PartialEq,
+    {
+        self.set.into_map(in_value, out_value)
     }
 }
 

@@ -33,8 +33,13 @@ extern crate assert_matches;
 pub mod alphabet;
 pub mod regex;
 
+mod dfa;
 mod label;
 mod partition;
 mod range;
 
-pub use label::StateLabel;
+#[cfg(test)]
+mod testutils;
+
+pub use dfa::DerivativeClasses;
+pub use label::{StateLabel, TransitionLabel};

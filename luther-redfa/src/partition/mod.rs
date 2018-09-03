@@ -14,7 +14,7 @@ use std::iter::{FromIterator, Peekable};
 
 use alphabet::Alphabet;
 use arrayvec::ArrayVec;
-use itertools::Itertools;
+use itertools::{self, Itertools};
 use range::RangeArgument;
 use regex::Range;
 
@@ -69,7 +69,7 @@ pub struct PartitionMap<U, V> {
 //  when you use BTreeMap::values()).
 impl<U, V> PartitionMap<U, V>
 where
-    U: Alphabet + Debug,
+    U: Alphabet,
     V: Clone + Debug + PartialEq,
 {
     /// Creates a new `PartitionMap` where the elements in `range` have `in_value` and all other
@@ -82,10 +82,7 @@ where
     pub fn new<R: RangeArgument<U>>(range: R, in_value: V, out_value: V) -> PartitionMap<U, V> {
         let (s, e, v) = map_range(range.start(), range.end(), &in_value, &out_value);
         if s > e && e.is_some() {
-            panic!(
-                "Cannot create a PartionMap: range start is greater than range end: [{:?}, {:?}).",
-                s, e
-            );
+            panic!("Cannot create a PartionMap: range start is greater than range end.");
         }
 
         assert_ne!(
@@ -100,12 +97,29 @@ where
 
         PartitionMap { map }
     }
-}
-impl<U, V> PartitionMap<U, V>
-where
-    U: Alphabet,
-    V: Clone + Debug + PartialEq,
-{
+
+    fn from_partition_map_to_bool(
+        source: &PartitionMap<U, bool>,
+        in_value: V,
+        out_value: V,
+    ) -> PartitionMap<U, V> {
+        PartitionMap {
+            map: source
+                .ranges()
+                .map(|(u, v)| {
+                    (
+                        u.clone(),
+                        if *v {
+                            in_value.clone()
+                        } else {
+                            out_value.clone()
+                        },
+                    )
+                })
+                .collect(),
+        }
+    }
+
     /// Gets the value associated with an element of U.
     pub fn get(&self, u: &U) -> &V {
         self.map
@@ -185,6 +199,54 @@ where
     fn delete_key(&mut self, u: U) {
         self.map.remove(&u);
     }
+
+    pub fn ranges(&self) -> impl Iterator<Item = (&U, &V)> {
+        self.map.range(..)
+    }
+}
+
+impl<'a, 'b, U, V> PartitionMap<U, V>
+where
+    U: Alphabet + 'a + 'b,
+    V: Clone + 'a + 'b,
+{
+    pub fn from_merge<I, J, M>(left: I, right: J, merge: &mut M) -> PartitionMap<U, V>
+    where
+        I: IntoIterator<Item = (U, V)>,
+        J: IntoIterator<Item = (U, V)>,
+        M: MergeValue<V>,
+    {
+        use itertools::EitherOrBoth::*;
+
+        PartitionMap {
+            map: itertools::merge_join_by(left, right, |(l, _), (r, _)| l.cmp(r))
+                .map(|value| match value {
+                    Left((u, v)) => (u, merge.next_left(v)),
+                    Right((u, v)) => (u, merge.next_right(v)),
+                    Both((u, vl), (_, vr)) => (u, merge.next_both(vl, vr)),
+                })
+                .collect(),
+        }
+    }
+}
+
+impl<U, V> IntoIterator for PartitionMap<U, V>
+where
+    U: Alphabet,
+    V: Clone,
+{
+    type Item = (U, V);
+    type IntoIter = btree_map::IntoIter<U, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.map.into_iter()
+    }
+}
+
+pub trait MergeValue<V> {
+    fn next_left(&mut self, v: V) -> V;
+    fn next_right(&mut self, v: V) -> V;
+    fn next_both(&mut self, left: V, right: V) -> V;
 }
 
 impl<U> PartitionMap<U, bool>
@@ -218,6 +280,13 @@ where
 
     pub fn is_complement_empty(&self) -> bool {
         self.map.len() == 1 && self.map[&U::min_value()]
+    }
+
+    fn range_iter<'a>(&'a self) -> PartitionMapRangeIter<'a, U> {
+        PartitionMapRangeIter {
+            inner: (&self.map).into_iter(),
+            first: true,
+        }
     }
 }
 
@@ -257,18 +326,6 @@ impl<U: Alphabet> FromIterator<Range<U>> for PartitionMap<U, bool> {
         }
 
         PartitionMap { map }
-    }
-}
-
-impl<'a, U: Alphabet> IntoIterator for &'a PartitionMap<U, bool> {
-    type Item = Range<U>;
-    type IntoIter = PartitionMapRangeIter<'a, U>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        PartitionMapRangeIter {
-            inner: (&self.map).into_iter(),
-            first: true,
-        }
     }
 }
 
@@ -505,15 +562,13 @@ pub struct PartitionSet<U> {
     map: PartitionMap<U, bool>,
 }
 
-impl<U: Alphabet + Debug> PartitionSet<U> {
+impl<U: Alphabet> PartitionSet<U> {
     pub fn new<R: RangeArgument<U>>(range: R) -> PartitionSet<U> {
         PartitionSet {
             map: PartitionMap::new(range, true, false),
         }
     }
-}
 
-impl<U: Alphabet> PartitionSet<U> {
     pub fn contains(&self, u: &U) -> bool {
         self.map.get(u).clone()
     }
@@ -537,6 +592,13 @@ impl<U: Alphabet> PartitionSet<U> {
             map: self.map.complement(),
         }
     }
+
+    pub fn into_map<V>(&self, in_value: V, out_value: V) -> PartitionMap<U, V>
+    where
+        V: Debug + Clone + PartialEq,
+    {
+        PartitionMap::from_partition_map_to_bool(&self.map, in_value, out_value)
+    }
 }
 
 impl<U: Alphabet> FromIterator<Range<U>> for PartitionSet<U> {
@@ -556,7 +618,7 @@ impl<'a, U: Alphabet> IntoIterator for &'a PartitionSet<U> {
 
     fn into_iter(self) -> Self::IntoIter {
         PartitionSetRangeIter {
-            inner: self.map.into_iter(),
+            inner: self.map.range_iter(),
         }
     }
 }
@@ -580,51 +642,9 @@ mod test {
     use proptest::collection;
     use proptest::prelude::*;
     use std::iter;
+    use testutils::*;
 
     // Simple types for use in unit tests
-
-    #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-    enum TestAlpha {
-        A,
-        B,
-        C,
-        D,
-        E,
-    }
-
-    impl Alphabet for TestAlpha {
-        fn min_value() -> Self {
-            TestAlpha::A
-        }
-
-        fn max_value() -> Self {
-            TestAlpha::E
-        }
-
-        fn increment(&self) -> Option<Self> {
-            use self::TestAlpha::*;
-
-            match self {
-                &A => Some(B),
-                &B => Some(C),
-                &C => Some(D),
-                &D => Some(E),
-                &E => None,
-            }
-        }
-
-        fn decrement(&self) -> Option<Self> {
-            use self::TestAlpha::*;
-
-            match self {
-                &A => None,
-                &B => Some(A),
-                &C => Some(B),
-                &D => Some(C),
-                &E => Some(D),
-            }
-        }
-    }
 
     type TestPM<V> = PartitionMap<TestAlpha, V>;
     type TestPS = PartitionSet<TestAlpha>;
@@ -669,7 +689,7 @@ mod test {
 
     #[test]
     fn empty_bounded_range_partition_map_includes_one_value() {
-        use self::TestAlpha::*;
+        use testutils::TestAlpha::*;
 
         let pm = TestPM::new(C..C, true, false);
 
@@ -679,7 +699,7 @@ mod test {
 
     #[test]
     fn empty_lower_bounded_range_paratition_map_includes_one_value() {
-        use self::TestAlpha::*;
+        use testutils::TestAlpha::*;
 
         let pm = TestPM::new(..A, true, false);
 
@@ -700,8 +720,8 @@ mod test {
 
     #[test]
     fn included_both_bounded_range_partition_map_includes_three_values() {
-        use self::TestAlpha::*;
         use std::collections::Bound::*;
+        use testutils::TestAlpha::*;
 
         let pm = TestPM::new((Included(B), Included(C)), true, false);
 
@@ -713,8 +733,8 @@ mod test {
 
     #[test]
     fn excluded_lower_bounded_range_partition_map_includes_two_values() {
-        use self::TestAlpha::*;
         use std::collections::Bound::*;
+        use testutils::TestAlpha::*;
 
         let pm = TestPM::new((Excluded(C), Unbounded), true, false);
 
@@ -725,8 +745,8 @@ mod test {
 
     #[test]
     fn empty_excluded_lower_bounded_range_partiton_map_includes_one_value() {
-        use self::TestAlpha::*;
         use std::collections::Bound::*;
+        use testutils::TestAlpha::*;
 
         let pm = TestPM::new((Excluded(E), Unbounded), true, false);
 
@@ -736,8 +756,8 @@ mod test {
 
     #[test]
     fn excluded_lower_include_upper_bounded_range_partition_map_includes_three_values() {
-        use self::TestAlpha::*;
         use std::collections::Bound::*;
+        use testutils::TestAlpha::*;
 
         let pm = TestPM::new((Excluded(B), Included(D)), true, false);
 
@@ -749,8 +769,8 @@ mod test {
 
     #[test]
     fn empty_excluded_lower_included_upper_bounded_range_partition_map_includes_one_value() {
-        use self::TestAlpha::*;
         use std::collections::Bound::*;
+        use testutils::TestAlpha::*;
 
         let pm = TestPM::new((Excluded(D), Included(D)), true, false);
 
@@ -760,8 +780,8 @@ mod test {
 
     #[test]
     fn excluded_both_bounded_range_partition_map_includes_three_values() {
-        use self::TestAlpha::*;
         use std::collections::Bound::*;
+        use testutils::TestAlpha::*;
 
         let pm = TestPM::new((Excluded(B), Excluded(D)), true, false);
 
@@ -774,8 +794,8 @@ mod test {
     #[test]
     #[should_panic]
     fn lower_bound_greater_than_upper_bound_panics() {
-        use self::TestAlpha::*;
         use std::collections::Bound::*;
+        use testutils::TestAlpha::*;
 
         TestPM::new((Included(C), Excluded(B)), true, false);
     }
@@ -783,15 +803,15 @@ mod test {
     #[test]
     #[should_panic]
     fn lower_exclusive_bound_equal_upper_exlusive_bound_panics() {
-        use self::TestAlpha::*;
         use std::collections::Bound::*;
+        use testutils::TestAlpha::*;
 
         TestPM::new((Excluded(C), Excluded(C)), true, false);
     }
 
     #[test]
     fn partion_map_gets_expected_values() {
-        use self::TestAlpha::*;
+        use testutils::TestAlpha::*;
 
         let pm = TestPM::new(B..D, true, false);
 
@@ -804,7 +824,7 @@ mod test {
 
     #[test]
     fn partion_map_min_lower_bound_gets_all_true() {
-        use self::TestAlpha::*;
+        use testutils::TestAlpha::*;
 
         let pm = TestPM::new(A.., true, false);
 
@@ -815,9 +835,44 @@ mod test {
         assert!(pm.get(&E));
     }
 
+    struct Value(u8);
+
+    impl MergeValue<u8> for Value {
+        fn next_left(&mut self, _: u8) -> u8 {
+            self.0 += 1;
+            self.0
+        }
+
+        fn next_right(&mut self, _: u8) -> u8 {
+            self.0 += 1;
+            self.0
+        }
+
+        fn next_both(&mut self, _: u8, _: u8) -> u8 {
+            self.0 += 1;
+            self.0
+        }
+    }
+
+    #[test]
+    fn patition_map_from_merge_get_expected_values() {
+        use testutils::TestAlpha::*;
+        let left = TestPM::new(B..C, 0, 1);
+        let right = TestPM::new(C..D, 3, 5);
+        let mut merge = Value(0);
+
+        let sut = TestPM::from_merge(left, right, &mut merge);
+
+        assert_eq!(*sut.get(&A), 1);
+        assert_eq!(*sut.get(&B), 2);
+        assert_eq!(*sut.get(&C), 3);
+        assert_eq!(*sut.get(&D), 4);
+        assert_eq!(*sut.get(&E), 4);
+    }
+
     #[test]
     fn split_partion_map_gets_expected_values() {
-        use self::TestAlpha::*;
+        use testutils::TestAlpha::*;
 
         let mut pm = TestPM::new(B..E, 1, 0);
         pm.split(D, |v| (v, 5));
@@ -831,7 +886,7 @@ mod test {
 
     #[test]
     fn split_partition_map_maintains_non_consectutive_values_to_left() {
-        use self::TestAlpha::*;
+        use testutils::TestAlpha::*;
 
         let mut pm = TestPM::new(B.., 1, 0);
         pm.split(C, |_| (0, 1));
@@ -843,7 +898,7 @@ mod test {
 
     #[test]
     fn split_partition_map_maintains_non_consectutive_values_to_right() {
-        use self::TestAlpha::*;
+        use testutils::TestAlpha::*;
 
         let mut pm = TestPM::new(..D, 0, 1);
         pm.split(C, |_| (0, 1));
@@ -855,7 +910,7 @@ mod test {
 
     #[test]
     fn split_partition_map_maintains_non_consecutive_values_at_min_value() {
-        use self::TestAlpha::*;
+        use testutils::TestAlpha::*;
 
         let pm = TestPM::new(..C, true, false);
         let mut pm = pm.union(&TestPM::new(D.., true, false));
@@ -868,7 +923,7 @@ mod test {
 
     #[test]
     fn split_partition_map_maintains_non_consecutive_values_at_initial_divide() {
-        use self::TestAlpha::*;
+        use testutils::TestAlpha::*;
 
         let mut pm = TestPM::new(C.., true, false);
         pm.split(C, |_| (true, false));
@@ -879,7 +934,7 @@ mod test {
 
     #[test]
     fn split_partition_map_maintains_non_consecutive_values_after_union() {
-        use self::TestAlpha::*;
+        use testutils::TestAlpha::*;
 
         let pm = TestPM::new(..C, true, false);
         let mut pm = pm.union(&TestPM::new(D.., true, false));
@@ -893,7 +948,7 @@ mod test {
 
     #[test]
     fn union_partition_map_gets_expected_values() {
-        use self::TestAlpha::*;
+        use testutils::TestAlpha::*;
         let other = TestPM::new(B..D, true, false);
 
         let sut = TestPM::new(C..E, true, false);
@@ -907,8 +962,22 @@ mod test {
     }
 
     #[test]
+    fn partition_map_from_map_to_bool_get_expected_values() {
+        use testutils::TestAlpha::*;
+        let source = TestPM::new(B..D, true, false);
+
+        let sut = TestPM::from_partition_map_to_bool(&source, 0, 1);
+
+        assert_eq!(*sut.get(&A), 1);
+        assert_eq!(*sut.get(&B), 0);
+        assert_eq!(*sut.get(&C), 0);
+        assert_eq!(*sut.get(&D), 1);
+        assert_eq!(*sut.get(&E), 1);
+    }
+
+    #[test]
     fn union_interval_iter_has_sticky_true() {
-        use self::TestAlpha::*;
+        use testutils::TestAlpha::*;
         let left = vec![(&A, &true), (&B, &false)].into_iter();
         let right = vec![(&A, &true), (&C, &false)].into_iter();
 
@@ -921,7 +990,7 @@ mod test {
 
     #[test]
     fn union_interval_iter_pairwise_has_sticky_true() {
-        use self::TestAlpha::*;
+        use testutils::TestAlpha::*;
         let left = vec![(&A, &true), (&B, &false), (&C, &false)].into_iter();
         let right = vec![(&A, &true), (&B, &true), (&C, &false)].into_iter();
 
@@ -934,7 +1003,7 @@ mod test {
 
     #[test]
     fn complement_partition_map_gets_expected_values() {
-        use self::TestAlpha::*;
+        use testutils::TestAlpha::*;
 
         let sut = TestPM::new(B..D, true, false);
         let result = sut.complement();
@@ -984,14 +1053,14 @@ mod test {
         let ranges = vec![Range::new(5u8, 8), Range::new(15, 25), Range::new(50, 60)];
 
         let sut = PartitionMap::from_iter(ranges.clone());
-        let result: Vec<_> = sut.into_iter().collect();
+        let result: Vec<_> = sut.range_iter().collect();
 
         assert_eq!(result, ranges);
     }
 
     #[test]
     fn patition_set_contains_expected_values() {
-        use self::TestAlpha::*;
+        use testutils::TestAlpha::*;
 
         let sut = TestPS::new(B..D);
 
@@ -1093,6 +1162,60 @@ mod test {
             for op in ops {
                 pm = op.run(&pm);
             }
+
+            for (first, second) in pm.map.values().tuple_windows() {
+                prop_assert_ne!(first, second);
+            }
+        }
+
+        #[test]
+        fn prop_merged_partition_map_contains_min_value(
+            pm_left in arb_partition_map(),
+            ops_left in arb_pm_op_vector(),
+            pm_right in arb_partition_map(),
+            ops_right in arb_pm_op_vector()
+            )
+        {
+            let mut pm_left = pm_left.clone();
+            for op in ops_left {
+                pm_left = op.run(&pm_left);
+            }
+
+            let mut pm_right = pm_right.clone();
+            for op in ops_right {
+                pm_right = op.run(&pm_right);
+            }
+
+            let mut merge = Value(0);
+            let pm = PartitionMap::from_merge(
+                PartitionMap::from_partition_map_to_bool(&pm_left, 0, 1),
+                PartitionMap::from_partition_map_to_bool(&pm_right, 0, 1), &mut merge);
+
+            prop_assert!(pm.map.contains_key(&0));
+        }
+
+        #[test]
+        fn prop_merged_partition_map_values_alternate(
+            pm_left in arb_partition_map(),
+            ops_left in arb_pm_op_vector(),
+            pm_right in arb_partition_map(),
+            ops_right in arb_pm_op_vector()
+            )
+        {
+            let mut pm_left = pm_left.clone();
+            for op in ops_left {
+                pm_left = op.run(&pm_left);
+            }
+
+            let mut pm_right = pm_right.clone();
+            for op in ops_right {
+                pm_right = op.run(&pm_right);
+            }
+
+            let mut merge = Value(0);
+            let pm = PartitionMap::from_merge(
+                PartitionMap::from_partition_map_to_bool(&pm_left, 0, 1),
+                PartitionMap::from_partition_map_to_bool(&pm_right, 0, 1), &mut merge);
 
             for (first, second) in pm.map.values().tuple_windows() {
                 prop_assert_ne!(first, second);
