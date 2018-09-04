@@ -8,14 +8,14 @@
 
 //! Trait to define alphabets for regular expressions and dfa's.
 
-use std::{char, mem};
+use std::{char, hash::Hash, mem};
 
 /// Required functionality for all alphabets that `luther-redfa` can use when
 /// building a dfa from a regular expresson (or a regular vector).
 ///
 /// The alphabet is required to have a total order, maximum and minimum
 /// elements, and the ability to increment and decrement elements.
-pub trait Alphabet: Ord + Clone {
+pub trait Alphabet: Ord + Clone + Hash {
     /// The minimum value in the alphabet.
     fn min_value() -> Self;
 

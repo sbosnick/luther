@@ -7,6 +7,7 @@
 // except according to those terms
 
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::iter;
 
 use alphabet::Alphabet;
@@ -22,7 +23,7 @@ use regex::{Regex, RegexContext, RegexKind};
 ///
 /// This trait is sealed and cannot be implemented for types outside of
 /// `luther-redfa`.
-pub trait StateLabel<'a, A: Alphabet>: private::Sealed {
+pub trait StateLabel<'a, A: Alphabet>: Hash + private::Sealed {
     /// Calculate the Brzozowski derivative of a `StateLabel` with respect to
     /// the characther `c` from the `Alphabet` `A`.
     fn derivative(&self, c: &A, ctx: &'a RegexContext<'a, A>) -> Self;
@@ -209,10 +210,16 @@ fn pm_from_merge<'a, A: Alphabet>(
     )
 }
 
+#[cfg(test)]
+pub(crate) use self::test::FakeLabel;
+
 mod private {
     pub trait Sealed {}
 
     impl<'a, A: super::Alphabet> Sealed for super::Regex<'a, A> {}
+
+    #[cfg(test)]
+    impl Sealed for super::FakeLabel {}
 }
 
 #[cfg(test)]
@@ -220,7 +227,72 @@ mod test {
     use super::*;
     use regex::Range;
     use std::collections::HashSet;
+    use std::hash::{Hash, Hasher};
     use testutils::TestAlpha;
+
+    // FakeLabel is a test double used to test dfa::State. It is in
+    // this module StateLabel is a sealed trait and to be able
+    // to access the private constructors of TransitionLabel.
+    #[derive(Debug, Clone)]
+    pub struct FakeLabel {
+        pub id: u32,
+        pub classes: (::testutils::TestAlpha, ::testutils::TestAlpha),
+        pub is_accepting_called: ::std::cell::Cell<bool>,
+    }
+
+    impl Default for FakeLabel {
+        fn default() -> Self {
+            FakeLabel {
+                id: 0,
+                classes: (::testutils::TestAlpha::A, ::testutils::TestAlpha::E),
+                is_accepting_called: ::std::cell::Cell::new(false),
+            }
+        }
+    }
+
+    impl Hash for FakeLabel {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            self.id.hash(state);
+        }
+    }
+
+    impl PartialEq for FakeLabel {
+        fn eq(&self, other: &FakeLabel) -> bool {
+            self.id.eq(&other.id)
+        }
+    }
+
+    impl Eq for FakeLabel {}
+
+    impl<'a> StateLabel<'a, ::testutils::TestAlpha> for FakeLabel {
+        fn derivative(
+            &self,
+            _c: &::testutils::TestAlpha,
+            _ctx: &'a RegexContext<'a, ::testutils::TestAlpha>,
+        ) -> Self {
+            unimplemented!()
+        }
+
+        fn is_accepting(&self, _ctx: &'a RegexContext<'a, ::testutils::TestAlpha>) -> bool {
+            self.is_accepting_called.set(true);
+            true
+        }
+
+        fn error(_ctx: &'a RegexContext<'a, ::testutils::TestAlpha>) -> Self {
+            unimplemented!()
+        }
+
+        fn derivative_classes(
+            &self,
+            _ctx: &'a RegexContext<'a, ::testutils::TestAlpha>,
+        ) -> DerivativeClasses<::testutils::TestAlpha> {
+            DerivativeClasses::new(PartitionMap::new(
+                self.classes.0..self.classes.1,
+                TransitionLabel::first(),
+                TransitionLabel::second(),
+            ))
+        }
+    }
 
     type TestCtx<'a> = RegexContext<'a, TestAlpha>;
 

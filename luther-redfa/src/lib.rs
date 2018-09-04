@@ -31,9 +31,9 @@ extern crate proptest;
 extern crate assert_matches;
 
 pub mod alphabet;
+pub mod dfa;
 pub mod regex;
 
-mod dfa;
 mod label;
 mod partition;
 mod range;
@@ -41,5 +41,5 @@ mod range;
 #[cfg(test)]
 mod testutils;
 
-pub use dfa::DerivativeClasses;
+pub use dfa::Dfa;
 pub use label::{StateLabel, TransitionLabel};

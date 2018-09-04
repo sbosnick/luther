@@ -11,7 +11,7 @@
 
 use alphabet::Alphabet;
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum TestAlpha {
     A,
     B,
