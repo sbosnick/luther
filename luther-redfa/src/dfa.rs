@@ -26,14 +26,14 @@
 //! `u8` (for ASCII).
 
 use std::collections::HashMap;
-use std::iter;
-use std::marker::PhantomData;
 use std::ops::Index;
 
 use alphabet::Alphabet;
+use itertools::Itertools;
 use label::{StateLabel, TransitionLabel};
 use partition::PartitionMap;
 use regex::RegexContext;
+use typed_arena::Arena;
 
 /// A deterministic finite automaton generated from a regular expression or
 /// a regular vector.
@@ -47,8 +47,9 @@ where
     A: Alphabet + 'a,
     S: StateLabel<'a, A>,
 {
-    _phantom: PhantomData<&'a A>,
-    _label: PhantomData<S>,
+    states: Vec<State<'a, A, S>>,
+    start: StateIdx,
+    error: Option<StateIdx>,
 }
 
 /// A state in a `Dfa`.
@@ -84,33 +85,113 @@ pub struct DerivativeClasses<A: Alphabet> {
 impl<'a, A, S> Dfa<'a, A, S>
 where
     A: Alphabet,
-    S: StateLabel<'a, A>,
+    S: StateLabel<'a, A> + Clone,
 {
     /// Generate a new `Dfa` for the `start` regular expression or regular vector.
-    ///
-    /// The `Dfa` will take ownership of `ctx`.
-    pub fn new(_start: S, _ctx: RegexContext<'a, A>) -> Dfa<A, S> {
-        unimplemented!()
+    pub fn new(start: S, ctx: &'a RegexContext<'a, A>) -> Dfa<A, S> {
+        // This is an iterative implementation of the recursive DFA construction
+        // algorithm using RE derivatives and character classes given in Figure 3
+        // of Owens et al.
+        use std::collections::hash_map::Entry::*;
+
+        let arena = Arena::new(); // manage lifetimes of the derivative class ranges
+        let mut states = Vec::new(); // the states in the DFA
+        let mut map = HashMap::new(); // implementation of "∃q' ∈ Q such that q' ≈ q"
+        let mut stack = Vec::new(); // the (index, iterator) stack for "recursion"
+
+        // add the start state
+        let mut curr = states.len();
+        states.push(State::new(start.clone(), ctx));
+        map.insert(start.clone(), curr);
+
+        // the explore() function from Figure 3
+        'explore: loop {
+            // - the argument to alloc_extend() is C(q) where states[curr] is q
+            // - iterating over 'iter' in goto() is fold(goto q) except that the
+            //   items in the iteration are both the TransitionLabel ("S") and the
+            //   representative character ("c ∈ S") for that derivative class subset.
+            let mut iter = arena
+                .alloc_extend(
+                    states[curr]
+                        .classes()
+                        .ranges()
+                        .unique_by(|&(_, trans)| trans),
+                )
+                .iter();
+
+            // the goto() function from Figure 3
+            'goto: loop {
+                match iter.next() {
+                    Some((a, trans)) => {
+                        let derivative = states[curr].label().derivative(&a, ctx);
+
+                        // "if ∃q' ∈ Q such that q' ≈ q"
+                        match map.entry(derivative.clone()) {
+                            Occupied(occ) => {
+                                // add a transition to an existing state
+                                states[curr].add_transition(*trans, StateIdx(*occ.get() as u32));
+                            }
+
+                            Vacant(vac) => {
+                                // add a new state for "derivative"
+                                let new_idx = states.len();
+                                states.push(State::new(derivative, ctx));
+                                vac.insert(new_idx);
+
+                                // add a transition to the new state
+                                states[curr].add_transition(*trans, StateIdx(new_idx as u32));
+
+                                // "recurse" into explore()
+                                stack.push((curr, iter));
+                                curr = new_idx;
+                                continue 'explore;
+                            }
+                        }
+                    }
+
+                    None => match stack.pop() {
+                        // "recurse" out of the current explore()
+                        Some((c, i)) => {
+                            curr = c;
+                            iter = i;
+                        }
+
+                        // no more derivative class subsets for the current state and
+                        // no more states on the stack so we are done
+                        None => break 'explore,
+                    },
+                }
+            }
+        }
+
+        Dfa {
+            states,
+            start: map.get(&start).map(|&idx| StateIdx(idx as u32)).unwrap(),
+            error: map.get(&S::error(ctx)).map(|&idx| StateIdx(idx as u32)),
+        }
     }
 
     /// Iterator over the states of the `Dfa`.
     pub fn states(&self) -> impl Iterator<Item = &State<'a, A, S>> {
-        iter::empty()
+        (&self.states).into_iter()
     }
 
     /// Iterator over the indexes of the states of the `Dfa`.
-    pub fn state_idx(&self) -> impl Iterator<Item = StateIdx> {
-        iter::empty()
+    pub fn state_idx(&'a self) -> impl Iterator<Item = StateIdx> + 'a {
+        (&self.states)
+            .into_iter()
+            .enumerate()
+            .map(|(i, _)| StateIdx(i as u32))
     }
 
     /// Get the index of the start state of the `Dfa`.
     pub fn start(&self) -> StateIdx {
-        unimplemented!()
+        self.start
     }
 
     /// Get the index of the error state of the `Dfa` (if any).
     pub fn error(&self) -> Option<StateIdx> {
-        unimplemented!()
+        self.error
     }
 }
 
@@ -122,8 +203,8 @@ where
     type Output = State<'a, A, S>;
 
     /// Get a `State` in the `Dfa` given its `StateIdx`.
-    fn index(&self, _index: StateIdx) -> &Self::Output {
-        unimplemented!()
+    fn index(&self, index: StateIdx) -> &Self::Output {
+        &self.states[index.0 as usize]
     }
 }
 
@@ -196,6 +277,8 @@ mod test {
     use super::*;
     use itertools::Itertools;
     use label::FakeLabel;
+    use regex::Range;
+    use std::iter;
     use testutils::TestAlpha;
 
     #[test]
@@ -249,5 +332,41 @@ mod test {
         sut.add_transition(tr, idx);
 
         assert_eq!(sut.transition(tr), Some(idx));
+    }
+
+    #[test]
+    fn simple_new_dfa_contains_expected_states() {
+        let ctx = RegexContext::new();
+        let regex = ctx.class(iter::once(Range::new('a', 'a')));
+        let empty = ctx.empty();
+        let error = ctx.class(iter::empty());
+
+        let sut = Dfa::new(regex, &ctx);
+        let states: Vec<_> = sut.states().collect();
+
+        assert_eq!(states.len(), 3);
+        for state in states {
+            assert!(state.label() == &regex || state.label() == &empty || state.label() == &error);
+        }
+    }
+
+    #[test]
+    fn owens_new_dfa_has_expect_number_of_state() {
+        // this test the dfa from Figure 2 of Owens et al.; the regex is "ab|ac"
+        let ctx = RegexContext::new();
+        let regex = ctx.alternation(
+            ctx.concat(
+                ctx.class(iter::once(Range::new('a', 'a'))),
+                ctx.class(iter::once(Range::new('b', 'b'))),
+            ),
+            ctx.concat(
+                ctx.class(iter::once(Range::new('a', 'a'))),
+                ctx.class(iter::once(Range::new('c', 'c'))),
+            ),
+        );
+
+        let sut = Dfa::new(regex, &ctx);
+
+        assert_eq!(sut.states().count(), 4);
     }
 }

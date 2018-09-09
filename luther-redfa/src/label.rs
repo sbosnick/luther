@@ -23,7 +23,7 @@ use regex::{Regex, RegexContext, RegexKind};
 ///
 /// This trait is sealed and cannot be implemented for types outside of
 /// `luther-redfa`.
-pub trait StateLabel<'a, A: Alphabet>: Hash + private::Sealed {
+pub trait StateLabel<'a, A: Alphabet>: Hash + Eq + private::Sealed {
     /// Calculate the Brzozowski derivative of a `StateLabel` with respect to
     /// the characther `c` from the `Alphabet` `A`.
     fn derivative(&self, c: &A, ctx: &'a RegexContext<'a, A>) -> Self;

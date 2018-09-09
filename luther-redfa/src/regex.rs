@@ -228,7 +228,7 @@ impl<'a, A: Alphabet> RegexContext<'a, A> {
 /// directly. It is also not possible to create a `Regex` from a `RegexKind` in
 /// order to allow `RegexContext` to maintain certain regular expressions in
 /// cannonical form.
-#[derive(Debug, PartialEq, Clone, Copy, Hash)]
+#[derive(Debug, PartialEq, Clone, Copy, Hash, Eq)]
 pub struct Regex<'a, A: 'a + Alphabet> {
     kind: &'a RegexKind<'a, A>,
 }
@@ -244,7 +244,7 @@ impl<'a, A: Alphabet> Regex<'a, A> {
 ///
 /// # Type Parameter
 /// - A: the alphabet over which the regular expression operates
-#[derive(Debug, PartialEq, PartialOrd, Hash)]
+#[derive(Debug, PartialEq, PartialOrd, Hash, Eq)]
 pub enum RegexKind<'a, A: 'a + Alphabet> {
     /// The empty regular expressions which matches everything, including the
     /// empty string.
@@ -326,7 +326,7 @@ impl<'a, A: Alphabet> Display for RegexKind<'a, A> {
 }
 
 /// A (possibly empty) subset of the alphabet `A`.
-#[derive(Debug, PartialEq, PartialOrd, Hash)]
+#[derive(Debug, PartialEq, PartialOrd, Hash, Eq)]
 pub struct Class<A: Alphabet> {
     set: PartitionSet<A>,
 }
@@ -391,7 +391,7 @@ impl<A: Alphabet> FromIterator<Range<A>> for Class<A> {
 
 /// A regular expression holder for which the complement (or negation) has been
 /// taken.
-#[derive(Debug, PartialEq, PartialOrd, Hash)]
+#[derive(Debug, PartialEq, PartialOrd, Hash, Eq)]
 pub struct Complement<'a, A: 'a + Alphabet> {
     inner: &'a RegexKind<'a, A>,
 }
@@ -404,7 +404,7 @@ impl<'a, A: Alphabet> Complement<'a, A> {
 }
 
 /// A regular expression holder for which repetition has been applied.
-#[derive(Debug, PartialEq, PartialOrd, Hash)]
+#[derive(Debug, PartialEq, PartialOrd, Hash, Eq)]
 pub struct Repetition<'a, A: 'a + Alphabet> {
     inner: &'a RegexKind<'a, A>,
 }
@@ -418,7 +418,7 @@ impl<'a, A: Alphabet> Repetition<'a, A> {
 
 /// A regular expression holder for regular expressions used as
 /// alternatives (through alternation).
-#[derive(Debug, PartialEq, PartialOrd, Hash)]
+#[derive(Debug, PartialEq, PartialOrd, Hash, Eq)]
 pub struct Alternation<'a, A: 'a + Alphabet> {
     first: &'a RegexKind<'a, A>,
     second: &'a RegexKind<'a, A>,
@@ -438,7 +438,7 @@ impl<'a, A: Alphabet> Alternation<'a, A> {
 
 /// A regular expressions holder for regular expressions used as
 /// arguments to the `and` operation.
-#[derive(Debug, PartialEq, PartialOrd, Hash)]
+#[derive(Debug, PartialEq, PartialOrd, Hash, Eq)]
 pub struct And<'a, A: 'a + Alphabet> {
     first: &'a RegexKind<'a, A>,
     second: &'a RegexKind<'a, A>,
@@ -458,7 +458,7 @@ impl<'a, A: Alphabet> And<'a, A> {
 
 /// A regular expression holder for regular expressions being
 /// concatenated.
-#[derive(Debug, PartialEq, PartialOrd, Hash)]
+#[derive(Debug, PartialEq, PartialOrd, Hash, Eq)]
 pub struct Concat<'a, A: 'a + Alphabet> {
     first: &'a RegexKind<'a, A>,
     second: &'a RegexKind<'a, A>,
