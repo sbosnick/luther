@@ -23,6 +23,8 @@
 
 use std::fmt::{self, Debug, Display};
 use std::iter::FromIterator;
+use std::ops::Index;
+use std::rc::Rc;
 
 use alphabet::Alphabet;
 use partition::{PartitionMap, PartitionSet, PartitionSetRangeIter};
@@ -219,6 +221,16 @@ impl<'a, A: Alphabet> RegexContext<'a, A> {
         self.arena
             .alloc(RegexKind::Complement(Complement { inner }))
     }
+
+    /// Create a `RegexVec` from an iterator of `Regex`'s.
+    pub fn vec<I>(&'a self, iter: I) -> RegexVec<'a, A>
+    where
+        I: Iterator<Item = Regex<'a, A>>,
+    {
+        RegexVec {
+            vec: self.arena.alloc_extend(iter.map(|r| (*r.kind).clone())),
+        }
+    }
 }
 
 /// A regular expression.
@@ -244,7 +256,7 @@ impl<'a, A: Alphabet> Regex<'a, A> {
 ///
 /// # Type Parameter
 /// - A: the alphabet over which the regular expression operates
-#[derive(Debug, PartialEq, PartialOrd, Hash, Eq)]
+#[derive(Debug, PartialEq, PartialOrd, Hash, Eq, Clone)]
 pub enum RegexKind<'a, A: 'a + Alphabet> {
     /// The empty regular expressions which matches everything, including the
     /// empty string.
@@ -325,10 +337,41 @@ impl<'a, A: Alphabet> Display for RegexKind<'a, A> {
     }
 }
 
+/// A regular vector.
+///
+/// A `RegexVec` is created by a factory method in `RegexContext` and is assocatied
+/// with that context. It is not possible to create a `RegexVec` directly.
+#[derive(Debug, PartialEq, Clone, Copy, Hash, Eq)]
+pub struct RegexVec<'a, A: 'a + Alphabet> {
+    vec: &'a [RegexKind<'a, A>],
+}
+
+impl<'a, A: Alphabet> RegexVec<'a, A> {
+    /// Get the length of the `RegexVec`.
+    pub fn len(&self) -> usize {
+        self.vec.len()
+    }
+
+    /// Get the element of the `RegexVec` at `index`.
+    ///
+    /// Returns `None` if `index` is greater than `self.len()`.
+    pub fn get(&self, index: usize) -> Option<&RegexKind<'a, A>> {
+        self.vec.get(index)
+    }
+}
+
+impl<'a, A: Alphabet> Index<usize> for RegexVec<'a, A> {
+    type Output = RegexKind<'a, A>;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        self.vec.index(index)
+    }
+}
+
 /// A (possibly empty) subset of the alphabet `A`.
-#[derive(Debug, PartialEq, PartialOrd, Hash, Eq)]
+#[derive(Debug, PartialEq, PartialOrd, Hash, Eq, Clone)]
 pub struct Class<A: Alphabet> {
-    set: PartitionSet<A>,
+    set: Rc<PartitionSet<A>>,
 }
 
 impl<A: Alphabet> Class<A> {
@@ -360,13 +403,13 @@ impl<A: Alphabet> Class<A> {
 
     fn union(&self, other: &Class<A>) -> Class<A> {
         Class {
-            set: self.set.union(&other.set),
+            set: Rc::new(self.set.union(&other.set)),
         }
     }
 
     fn complement(&self) -> Class<A> {
         Class {
-            set: self.set.complement(),
+            set: Rc::new(self.set.complement()),
         }
     }
 
@@ -384,14 +427,14 @@ impl<A: Alphabet> FromIterator<Range<A>> for Class<A> {
         T: IntoIterator<Item = Range<A>>,
     {
         Class {
-            set: iter.into_iter().collect(),
+            set: Rc::new(iter.into_iter().collect()),
         }
     }
 }
 
 /// A regular expression holder for which the complement (or negation) has been
 /// taken.
-#[derive(Debug, PartialEq, PartialOrd, Hash, Eq)]
+#[derive(Debug, PartialEq, PartialOrd, Hash, Eq, Clone)]
 pub struct Complement<'a, A: 'a + Alphabet> {
     inner: &'a RegexKind<'a, A>,
 }
@@ -404,7 +447,7 @@ impl<'a, A: Alphabet> Complement<'a, A> {
 }
 
 /// A regular expression holder for which repetition has been applied.
-#[derive(Debug, PartialEq, PartialOrd, Hash, Eq)]
+#[derive(Debug, PartialEq, PartialOrd, Hash, Eq, Clone)]
 pub struct Repetition<'a, A: 'a + Alphabet> {
     inner: &'a RegexKind<'a, A>,
 }
@@ -418,7 +461,7 @@ impl<'a, A: Alphabet> Repetition<'a, A> {
 
 /// A regular expression holder for regular expressions used as
 /// alternatives (through alternation).
-#[derive(Debug, PartialEq, PartialOrd, Hash, Eq)]
+#[derive(Debug, PartialEq, PartialOrd, Hash, Eq, Clone)]
 pub struct Alternation<'a, A: 'a + Alphabet> {
     first: &'a RegexKind<'a, A>,
     second: &'a RegexKind<'a, A>,
@@ -438,7 +481,7 @@ impl<'a, A: Alphabet> Alternation<'a, A> {
 
 /// A regular expressions holder for regular expressions used as
 /// arguments to the `and` operation.
-#[derive(Debug, PartialEq, PartialOrd, Hash, Eq)]
+#[derive(Debug, PartialEq, PartialOrd, Hash, Eq, Clone)]
 pub struct And<'a, A: 'a + Alphabet> {
     first: &'a RegexKind<'a, A>,
     second: &'a RegexKind<'a, A>,
@@ -458,7 +501,7 @@ impl<'a, A: Alphabet> And<'a, A> {
 
 /// A regular expression holder for regular expressions being
 /// concatenated.
-#[derive(Debug, PartialEq, PartialOrd, Hash, Eq)]
+#[derive(Debug, PartialEq, PartialOrd, Hash, Eq, Clone)]
 pub struct Concat<'a, A: 'a + Alphabet> {
     first: &'a RegexKind<'a, A>,
     second: &'a RegexKind<'a, A>,
@@ -956,5 +999,35 @@ mod test {
         let sut2 = ctx.concat(class, ctx.concat(neg_class, rep_class));
 
         assert_eq!(sut1, sut2);
+    }
+
+    #[test]
+    fn vec_has_expected_length() {
+        let ctx = RegexContext::new();
+        let class = ctx.class(iter::once(Range::new('a', 'c')));
+
+        let sut = ctx.vec(iter::once(class));
+
+        assert_eq!(sut.len(), 1);
+    }
+
+    #[test]
+    fn vec_has_expected_item() {
+        let ctx = RegexContext::new();
+        let class = ctx.class(iter::once(Range::new('a', 'c')));
+
+        let sut = ctx.vec(iter::once(class));
+
+        assert_eq!(sut.get(0).unwrap(), class.kind())
+    }
+
+    #[test]
+    fn vec_index_has_expected_item() {
+        let ctx = RegexContext::new();
+        let class = ctx.class(iter::once(Range::new('a', 'c')));
+
+        let sut = ctx.vec(iter::once(class));
+
+        assert_eq!(&sut[0], class.kind())
     }
 }
