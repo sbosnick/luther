@@ -358,6 +358,36 @@ impl<'a, A: Alphabet> RegexVec<'a, A> {
     pub fn get(&self, index: usize) -> Option<&RegexKind<'a, A>> {
         self.vec.get(index)
     }
+
+    /// Map this `RegexVec` into another one in the same context.
+    ///
+    /// The mapping is done component wise on the `Regex`'s that make up the
+    /// `RegexVec`.
+    pub fn map<F>(self, ctx: &'a RegexContext<'a, A>, f: F) -> RegexVec<'a, A>
+    where
+        F: Fn(Regex<'a, A>) -> Regex<'a, A>,
+    {
+        // the iterator is relalized into v incase f() calls a method on ctx
+        // which would panic if it is done inside of ctx.vec().
+        let v: Vec<_> = self.vec.iter().map(|rek| f(Regex { kind: rek })).collect();
+        ctx.vec(v.into_iter())
+    }
+
+    /// Tests is any element of the `RegexVec` matches a predicate.
+    pub fn any<P>(self, p: P) -> bool
+    where
+        P: Fn(Regex<'a, A>) -> bool,
+    {
+        self.vec.iter().any(|rek| p(Regex { kind: rek }))
+    }
+
+    /// Maps the elements of this `RegexVec` to another type.
+    pub fn map_elements<F: 'a, R>(&self, f: F) -> impl Iterator<Item = R> + 'a
+    where
+        F: Fn(Regex<'a, A>) -> R,
+    {
+        self.vec.iter().map(move |rek| f(Regex { kind: rek }))
+    }
 }
 
 impl<'a, A: Alphabet> Index<usize> for RegexVec<'a, A> {
@@ -1029,5 +1059,17 @@ mod test {
         let sut = ctx.vec(iter::once(class));
 
         assert_eq!(&sut[0], class.kind())
+    }
+
+    #[test]
+    fn vec_map_elements_returns_expected_items() {
+        let ctx = RegexContext::new();
+        let class = ctx.class(iter::once(Range::new('a', 'c')));
+
+        let sut = ctx.vec(iter::once(class));
+        let result: Vec<_> = sut.map_elements(|_| 5).collect();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], 5);
     }
 }

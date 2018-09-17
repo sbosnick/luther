@@ -7,13 +7,15 @@
 // except according to those terms
 
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::hash::Hash;
 use std::iter;
 
 use alphabet::Alphabet;
 use dfa::DerivativeClasses;
+use itertools::Itertools;
 use partition::{MergeValue, PartitionMap};
-use regex::{Regex, RegexContext, RegexKind};
+use regex::{Regex, RegexContext, RegexKind, RegexVec};
 
 /// StateLabel describes types that can be used to generate a deterministic
 /// finite automaton (DFA).
@@ -26,14 +28,14 @@ use regex::{Regex, RegexContext, RegexKind};
 pub trait StateLabel<'a, A: Alphabet>: Hash + Eq + private::Sealed {
     /// Calculate the Brzozowski derivative of a `StateLabel` with respect to
     /// the characther `c` from the `Alphabet` `A`.
-    fn derivative(&self, c: &A, ctx: &'a RegexContext<'a, A>) -> Self;
+    fn derivative(self, c: &A, ctx: &'a RegexContext<'a, A>) -> Self;
 
     /// Predicate to determine if a state in the DFA labeled with `self`
     /// is an accepting state.
-    fn is_accepting(&self, ctx: &'a RegexContext<'a, A>) -> bool;
+    fn is_accepting(self, ctx: &'a RegexContext<'a, A>) -> bool;
 
     /// Create the label for the error state in a generated DFA.
-    fn error(ctx: &'a RegexContext<'a, A>) -> Self;
+    fn error(&self, ctx: &'a RegexContext<'a, A>) -> Self;
 
     /// Create the derivative classes for the state labeled by self.
     fn derivative_classes(&self, ctx: &'a RegexContext<'a, A>) -> DerivativeClasses<A>;
@@ -127,7 +129,7 @@ impl<'a, A: Alphabet> Nullable<'a, A> for Regex<'a, A> {
 }
 
 impl<'a, A: Alphabet> StateLabel<'a, A> for Regex<'a, A> {
-    fn derivative(&self, c: &A, ctx: &'a RegexContext<'a, A>) -> Self {
+    fn derivative(self, c: &A, ctx: &'a RegexContext<'a, A>) -> Self {
         use self::RegexKind::*;
 
         // this is from the rules for computing ∂ for a regular expression in
@@ -158,16 +160,43 @@ impl<'a, A: Alphabet> StateLabel<'a, A> for Regex<'a, A> {
         }
     }
 
-    fn is_accepting(&self, ctx: &'a RegexContext<'a, A>) -> bool {
+    fn is_accepting(self, ctx: &'a RegexContext<'a, A>) -> bool {
         is_nullable(self.clone(), ctx)
     }
 
-    fn error(ctx: &'a RegexContext<'a, A>) -> Self {
+    fn error(&self, ctx: &'a RegexContext<'a, A>) -> Self {
         ctx.class(iter::empty())
     }
 
     fn derivative_classes(&self, ctx: &'a RegexContext<'a, A>) -> DerivativeClasses<A> {
         DerivativeClasses::new(regex_to_partition_map(self.clone(), ctx))
+    }
+}
+
+impl<'a, A: Alphabet + Debug> StateLabel<'a, A> for RegexVec<'a, A> {
+    fn derivative(self, c: &A, ctx: &'a RegexContext<'a, A>) -> Self {
+        self.map(ctx, |re| re.derivative(c, ctx))
+    }
+
+    fn is_accepting(self, ctx: &'a RegexContext<'a, A>) -> bool {
+        self.any(|re| re.is_accepting(ctx))
+    }
+
+    fn error(&self, ctx: &'a RegexContext<'a, A>) -> Self {
+        ctx.vec(iter::repeat(ctx.class(iter::empty())).take(self.len()))
+    }
+
+    fn derivative_classes(&self, ctx: &'a RegexContext<'a, A>) -> DerivativeClasses<A> {
+        DerivativeClasses::new(
+            self.map_elements(move |re| regex_to_partition_map(re, ctx))
+                .into_iter()
+                .fold1(|left, right| {
+                    PartitionMap::from_merge(left, right, &mut TransitionLabelMerger::new())
+                })
+                .unwrap_or_else(|| {
+                    PartitionMap::new(.., TransitionLabel::first(), TransitionLabel::second())
+                }),
+        )
     }
 }
 
@@ -218,6 +247,8 @@ mod private {
 
     impl<'a, A: super::Alphabet> Sealed for super::Regex<'a, A> {}
 
+    impl<'a, A: super::Alphabet> Sealed for super::RegexVec<'a, A> {}
+
     #[cfg(test)]
     impl Sealed for super::FakeLabel {}
 }
@@ -266,19 +297,19 @@ mod test {
 
     impl<'a> StateLabel<'a, ::testutils::TestAlpha> for FakeLabel {
         fn derivative(
-            &self,
+            self,
             _c: &::testutils::TestAlpha,
             _ctx: &'a RegexContext<'a, ::testutils::TestAlpha>,
         ) -> Self {
             unimplemented!()
         }
 
-        fn is_accepting(&self, _ctx: &'a RegexContext<'a, ::testutils::TestAlpha>) -> bool {
+        fn is_accepting(self, _ctx: &'a RegexContext<'a, ::testutils::TestAlpha>) -> bool {
             self.is_accepting_called.set(true);
             true
         }
 
-        fn error(_ctx: &'a RegexContext<'a, ::testutils::TestAlpha>) -> Self {
+        fn error(&self, _ctx: &'a RegexContext<'a, ::testutils::TestAlpha>) -> Self {
             unimplemented!()
         }
 
@@ -441,5 +472,24 @@ mod test {
         let ranges: HashSet<_> = classes.ranges().map(|(_, v)| v).collect();
 
         assert_eq!(ranges.len(), 4);
+    }
+
+    #[test]
+    fn derivative_classes_of_regex_vec_is_intersecting_subsets() {
+        let ctx = RegexContext::new();
+        let re1 = ctx.concat(
+            ctx.class(iter::once(Range::new('a', 'a'))),
+            ctx.class(iter::once(Range::new('b', 'b'))),
+        );
+        let re2 = ctx.concat(
+            ctx.class(iter::once(Range::new('b', 'b'))),
+            ctx.class(iter::once(Range::new('c', 'c'))),
+        );
+
+        let sut = ctx.vec(vec![re1, re2].into_iter());
+        let classes = sut.derivative_classes(&ctx);
+        let ranges: HashSet<_> = classes.ranges().map(|(_, v)| v).collect();
+
+        assert_eq!(ranges.len(), 3);
     }
 }

