@@ -47,3 +47,10 @@ mod testutils;
 pub use dfa::Dfa;
 pub use label::{StateLabel, TransitionLabel};
 pub use parser::{DfaContext, Error, Result};
+
+/// A specilized `Dfa` for a single regular expression.
+pub type RegexDfa<'a, A> = Dfa<A, dfa::RegexState<'a, A, regex::Regex<'a, A>>, regex::Regex<'a, A>>;
+
+/// A specilized `Dfa` for a regular vector.
+pub type RegexVecDfa<'a, A> =
+    Dfa<A, dfa::RegexState<'a, A, regex::RegexVec<'a, A>>, regex::RegexVec<'a, A>>;
