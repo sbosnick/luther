@@ -38,10 +38,11 @@ use std::ops::Index;
 
 use alphabet::Alphabet;
 use itertools::Itertools;
-use label::{StateLabel, TransitionLabel};
 use partition::PartitionMap;
 use regex::RegexContext;
 use typed_arena::Arena;
+
+pub use label::{StateLabel, TransitionLabel};
 
 /// A deterministic finite automaton.
 ///

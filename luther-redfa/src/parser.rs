@@ -19,25 +19,25 @@ use {RegexDfa, RegexVecDfa};
 
 /// The context for generating a deterministic finite automaton from either
 /// a single regular expression or from a sequence of regular expressions.
-pub struct DfaContext<'a> {
+pub struct Context<'a> {
     ctx: RegexContext<'a, char>,
 }
 
-impl<'a> DfaContext<'a> {
-    /// Create a new `DfaContext`.
-    pub fn new() -> DfaContext<'a> {
-        DfaContext {
+impl<'a> Context<'a> {
+    /// Create a new `Context`.
+    pub fn new() -> Context<'a> {
+        Context {
             ctx: RegexContext::new(),
         }
     }
 
-    /// Generate a `Dfa` from the regular expression given by `regex`.
+    /// Generate a dfa from the regular expression given by `regex`.
     pub fn from_regex(&'a self, regex: &str) -> Result<RegexDfa<'a, char>> {
         let regex = parse_regex(regex, &self.ctx)?;
         Ok(RegexDfa::new(regex, &self.ctx))
     }
 
-    /// Generate a `Dfa` from the regular vector formed by the regular expressions given
+    /// Generate a dfa from the regular vector formed by the regular expressions given
     /// by `regexes`.
     pub fn from_regex_vec<'b, I>(&'a self, regexes: I) -> Result<RegexVecDfa<'a, char>>
     where
@@ -55,7 +55,7 @@ impl<'a> DfaContext<'a> {
 }
 
 /// The error type for parsing regular expressions while generating
-/// a `Dfa`.
+/// a dfa.
 #[derive(Debug)]
 pub struct Error {
     regex: String,
@@ -132,7 +132,7 @@ impl Fail for Error {
     }
 }
 
-/// A specilized `Result` type for creating `Dfa`'s
+/// A specilized `Result` type for creating dfa's
 pub type Result<T> = ::std::result::Result<T, Error>;
 
 fn parse_regex_to_hir(regex: &str) -> Result<Hir> {
@@ -412,7 +412,7 @@ mod test {
     #[test]
     fn dfa_context_from_regex_for_owens_regex_has_expected_number_of_states() {
         // this tests the dfa from Figure 2 of Owens et al.
-        let sut = DfaContext::new();
+        let sut = Context::new();
         let dfa = sut.from_regex("ab|ac")
             .expect("Unexpected error parsing regex");
 
@@ -421,7 +421,7 @@ mod test {
 
     #[test]
     fn dfa_context_from_regex_vec_has_expected_number_of_states() {
-        let sut = DfaContext::new();
+        let sut = Context::new();
         let dfa = sut.from_regex_vec(vec!["ab", "ac"])
             .expect("Unexpected error parsing regexs");
 
