@@ -103,6 +103,19 @@ where
     transitions: HashMap<TransitionLabel, StateIdx>,
 }
 
+/// A state in a `Dfa` that is independant of any regular expression or regular vector.
+///
+/// An `ExternalState` is labeled by a generic type `T`.
+pub struct ExternalState<A, T>
+where
+    A: Alphabet,
+{
+    label: T,
+    classes: DerivativeClasses<A>,
+    is_accepting: bool,
+    transitions: HashMap<TransitionLabel, StateIdx>,
+}
+
 /// The index of a particular state in a `Dfa`.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct StateIdx(u32);
@@ -211,6 +224,31 @@ where
             phantom: PhantomData,
         }
     }
+
+    /// Map this `Dfa` to a `Dfa` with external states that are labeled with `T`.
+    ///
+    /// The mapping from a `StateLabel` to a `T` is done by `f`.
+    pub fn map<F, T>(self, f: F) -> Dfa<A, ExternalState<A, T>, T>
+    where
+        F: Fn(S) -> T,
+    {
+        let states: Vec<_> = self.states
+            .into_iter()
+            .map(|rs| ExternalState {
+                classes: rs.classes,
+                transitions: rs.transitions,
+                is_accepting: rs.label.clone().is_accepting(&rs.ctx),
+                label: f(rs.label),
+            })
+            .collect();
+
+        Dfa {
+            states,
+            start: self.start,
+            error: self.error,
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<A, S, T> Dfa<A, S, T>
@@ -301,6 +339,27 @@ where
     /// Predicate to check if this `RegexState` is an accepting state.
     fn is_accepting(&self) -> bool {
         self.label.clone().is_accepting(self.ctx)
+    }
+}
+
+impl<A, T> State<A, T> for ExternalState<A, T>
+where
+    A: Alphabet,
+{
+    fn classes(&self) -> &DerivativeClasses<A> {
+        &self.classes
+    }
+
+    fn label(&self) -> &T {
+        &self.label
+    }
+
+    fn transition(&self, label: TransitionLabel) -> Option<StateIdx> {
+        self.transitions.get(&label).map(|&idx| idx)
+    }
+
+    fn is_accepting(&self) -> bool {
+        self.is_accepting
     }
 }
 
@@ -445,5 +504,18 @@ mod test {
         let sut = Dfa::new(vec, &ctx);
 
         assert_eq!(sut.states().count(), 5);
+    }
+
+    #[test]
+    fn simple_dfa_maps_to_same_state_count() {
+        let ctx = RegexContext::new();
+        let regex = ctx.class(iter::once(Range::new('a', 'a')));
+
+        let sut = Dfa::new(regex, &ctx);
+        let count = sut.states().count();
+        let mapped = sut.map(|_| 42);
+        let count2 = mapped.states().count();
+
+        assert_eq!(count, count2);
     }
 }
