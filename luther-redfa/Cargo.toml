@@ -24,6 +24,8 @@ repository = "sbosnick/luther"
 arrayvec = "0.4.7"
 itertools = "0.7.8"
 typed-arena = "1.4"
+failure = "0.1.2"
+regex-syntax = "0.6.2"
 
 [dev-dependencies]
 assert_matches = "1.3"

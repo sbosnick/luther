@@ -19,7 +19,9 @@
 #![deny(missing_docs)]
 
 extern crate arrayvec;
+extern crate failure;
 extern crate itertools;
+extern crate regex_syntax;
 extern crate typed_arena;
 
 #[cfg(test)]
@@ -35,6 +37,7 @@ pub mod dfa;
 pub mod regex;
 
 mod label;
+mod parser;
 mod partition;
 mod range;
 
@@ -43,3 +46,4 @@ mod testutils;
 
 pub use dfa::Dfa;
 pub use label::{StateLabel, TransitionLabel};
+pub use parser::{DfaContext, Error, Result};
