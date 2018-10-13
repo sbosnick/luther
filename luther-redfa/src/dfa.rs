@@ -27,6 +27,7 @@
 
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
+use std::marker::PhantomData;
 
 use std::ops::Index;
 
@@ -45,14 +46,15 @@ use typed_arena::Arena;
 /// The primary types that implement `StateLabel` are `Regex` and (in future) a
 /// type that represents regular vectors.
 #[derive(Debug)]
-pub struct Dfa<'a, A, S>
+pub struct Dfa<A, S, T>
 where
-    A: Alphabet + 'a,
-    S: StateLabel<'a, A>,
+    A: Alphabet,
+    S: State<A, T>,
 {
-    states: Vec<RegexState<'a, A, S>>,
+    states: Vec<S>,
     start: StateIdx,
     error: Option<StateIdx>,
+    phantom: PhantomData<(A, T)>,
 }
 
 /// A state in a `Dfa`.
@@ -103,13 +105,13 @@ pub struct DerivativeClasses<A: Alphabet> {
     map: PartitionMap<A, TransitionLabel>,
 }
 
-impl<'a, A, S> Dfa<'a, A, S>
+impl<'a, A, S> Dfa<A, RegexState<'a, A, S>, S>
 where
     A: Alphabet,
     S: StateLabel<'a, A> + Clone,
 {
     /// Generate a new `Dfa` for the `start` regular expression or regular vector.
-    pub fn new(start: S, ctx: &'a RegexContext<'a, A>) -> Dfa<A, S> {
+    pub fn new(start: S, ctx: &'a RegexContext<'a, A>) -> Dfa<A, RegexState<'a, A, S>, S> {
         // This is an iterative implementation of the recursive DFA construction
         // algorithm using RE derivatives and character classes given in Figure 3
         // of Owens et al.
@@ -192,6 +194,7 @@ where
                 .unwrap(),
             error: map.get(&S::error(&start, ctx))
                 .map(|&idx| StateIdx(idx as u32)),
+            phantom: PhantomData,
         }
     }
 
@@ -219,10 +222,10 @@ where
     }
 }
 
-impl<'a, A, S> Index<StateIdx> for Dfa<'a, A, S>
+impl<'a, A, S> Index<StateIdx> for Dfa<A, RegexState<'a, A, S>, S>
 where
     A: Alphabet,
-    S: StateLabel<'a, A>,
+    S: StateLabel<'a, A> + Clone,
 {
     type Output = RegexState<'a, A, S>;
 

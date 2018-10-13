@@ -9,7 +9,7 @@
 use std::fmt::{self, Display};
 use std::iter;
 
-use dfa::Dfa;
+use dfa::{Dfa, RegexState};
 use failure::Fail;
 use regex::{Range, Regex, RegexContext, RegexVec};
 use regex_syntax::{
@@ -31,14 +31,20 @@ impl<'a> DfaContext<'a> {
     }
 
     /// Generate a `Dfa` from the regular expression given by `regex`.
-    pub fn from_regex(&'a self, regex: &str) -> Result<Dfa<'a, char, Regex<'a, char>>> {
+    pub fn from_regex(
+        &'a self,
+        regex: &str,
+    ) -> Result<Dfa<char, RegexState<'a, char, Regex<'a, char>>, Regex<'a, char>>> {
         let regex = parse_regex(regex, &self.ctx)?;
         Ok(Dfa::new(regex, &self.ctx))
     }
 
     /// Generate a `Dfa` from the regular vector formed by the regular expressions given
     /// by `regexes`.
-    pub fn from_regex_vec<'b, I>(&'a self, regexes: I) -> Result<Dfa<'a, char, RegexVec<'a, char>>>
+    pub fn from_regex_vec<'b, I>(
+        &'a self,
+        regexes: I,
+    ) -> Result<Dfa<char, RegexState<'a, char, RegexVec<'a, char>>, RegexVec<'a, char>>>
     where
         I: IntoIterator<Item = &'b str>,
     {
