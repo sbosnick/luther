@@ -6,21 +6,26 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms
 
-//! The types that define a deterministic finite automaton that can be generated
+//! Types that define a deterministic finite automaton that can be generated
 //! from either a regular expression or a regular vector.
 //!
-//! A `Dfa` over an `Alphabet` is a set of `State's`, one of which is the start
+//! A `Dfa` over an `Alphabet` is a set of `State`'s, one of which is the start
 //! state and, optionally, one of which is the error state. Some of the states
 //! may also be identified as accepting states. The states have transisitons to
 //! other states.
 //!
-//! The states are labeled with either a `Regex` or (in future) a regular vector. The types that
-//! can act as state labels implement StateLabel. Each state also has `DerivativeClasses` which
-//! are a partition of the `Alphabet` into subsets which require a single transition for all of
-//! the elements in a particular subset.
+//! The states are types that implement the trait `State`. The most important of these
+//! is `RegexState` which is the state type used for constructing a `Dfa` from either a
+//! regular expression or a regular vector.
+//!
+//! Each `State` has `DerivativeClasses` which are a partition of the `Alphabet` into subsets
+//! which require a single transisiton for all of the elements in a particular subset.
+//!
+//! Each `RegexState` is labled with either a `Regex` or a `RegexVec`. These types that can
+//! act as a state label implement `StateLabel`.
 //!
 //! The `DerivativeClasses` associated with a state map elements of the `Alphabet` to
-//! `TransitionLabel's`, which in turn map a transition from one state to the next.
+//! `TransitionLabel`'s, which in turn map a transition from one state to the next.
 //!
 //! The primary `Alphabet's` over which you can construct a `Dfa` are `char` (for Unicode) and
 //! `u8` (for ASCII).
@@ -38,13 +43,14 @@ use partition::PartitionMap;
 use regex::RegexContext;
 use typed_arena::Arena;
 
-/// A deterministic finite automaton generated from a regular expression or
-/// a regular vector.
+/// A deterministic finite automaton.
 ///
-/// Dfa is generic over its `Alphabet` and over its `StateLabel`. The primary
-/// types that implement `Alphabet` are `char` (for Unicode) and `u8` (for ASCII).
-/// The primary types that implement `StateLabel` are `Regex` and (in future) a
-/// type that represents regular vectors.
+/// `Dfa` is generic over its `Alphabet`, over its `State`'s, and over the labels for
+/// those states. The primary types that implement `Alphabet` are `char` (for Unicode)
+/// and `u8` for (ASCII).  The primary type that implements `State` is `RegexState`
+/// which is, in turn, generic over its `StateLabel`. The two types that implement
+/// `StateLabel` are `Regex` (for a single regular expression) and `RegexVec` (for a
+/// regular vector).
 #[derive(Debug)]
 pub struct Dfa<A, S, T>
 where
@@ -58,6 +64,11 @@ where
 }
 
 /// A state in a `Dfa`.
+///
+/// Each state has a label, a set of DerivativeClasses that map elements of the
+/// `Alphabet` to a transitions (using a TransitionLabel), and the transisitions
+/// themselves that identify the state to which the transition when for a
+/// particular subset of the `Alphabet` identifed by a particular `TransitionLabel`.
 pub trait State<A: Alphabet, T> {
     /// Get the `DerivativeClasses` for this state.
     fn classes(&self) -> &DerivativeClasses<A>;
@@ -75,13 +86,11 @@ pub trait State<A: Alphabet, T> {
     fn is_accepting(&self) -> bool;
 }
 
-/// A state in a `Dfa` associated with a regular expression.
+/// A state in a `Dfa` associated with a regular expression or a regular vector.
 ///
-/// Each state has a label (of a type that implements `StateLabel`), a set
-/// of DerivativeClasses that map elements of the `Alphabet` to a transitions
-/// (using a TransitionLabel), and the transisitions themselves that identify
-/// the state to which the transition when for a particular subset of the `Alphabet`
-/// identifed by a particular `TransitionLabel`.
+/// A `RegexState` is a `State` that is labled by a `StateLabel` which is either
+/// a `Regex` (for a single regular expression) or a `RegexVec` (for a regular
+/// vector).
 pub struct RegexState<'a, A, S>
 where
     A: Alphabet + 'a,
@@ -97,8 +106,12 @@ where
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct StateIdx(u32);
 
-/// The DerivativeClasses are a partition of the `Alphabet` into subsets whose
-/// Brzozowski derivatives for a specified regular expression (or regular vector)
+/// DerivativeClasses are a partition of the `Alphabet` into subsets which require
+/// a single transition in a generated `Dfa` for all of the elements of a particular
+/// subset.
+///
+/// In more technical terms, the `DerivativeClasses` are subsets of the `Alphabet`
+/// whose Brzozoski derivatives for a particular regular expression or regular vector
 /// are equivalant for each member of the subset.
 #[derive(Debug, PartialEq, Clone)]
 pub struct DerivativeClasses<A: Alphabet> {
@@ -197,14 +210,20 @@ where
             phantom: PhantomData,
         }
     }
+}
 
+impl<A, S, T> Dfa<A, S, T>
+where
+    A: Alphabet,
+    S: State<A, T>,
+{
     /// Iterator over the states of the `Dfa`.
-    pub fn states(&self) -> impl Iterator<Item = &RegexState<'a, A, S>> {
+    pub fn states(&self) -> impl Iterator<Item = &S> {
         (&self.states).into_iter()
     }
 
     /// Iterator over the indexes of the states of the `Dfa`.
-    pub fn state_idx(&'a self) -> impl Iterator<Item = StateIdx> + 'a {
+    pub fn state_idx<'a>(&'a self) -> impl Iterator<Item = StateIdx> + 'a {
         (&self.states)
             .into_iter()
             .enumerate()
@@ -222,14 +241,14 @@ where
     }
 }
 
-impl<'a, A, S> Index<StateIdx> for Dfa<A, RegexState<'a, A, S>, S>
+impl<A, S, T> Index<StateIdx> for Dfa<A, S, T>
 where
     A: Alphabet,
-    S: StateLabel<'a, A> + Clone,
+    S: State<A, T>,
 {
-    type Output = RegexState<'a, A, S>;
+    type Output = S;
 
-    /// Get a `State` in the `Dfa` given its `StateIdx`.
+    /// Get a state in the `Dfa` given its `StateIdx`.
     fn index(&self, index: StateIdx) -> &Self::Output {
         &self.states[index.0 as usize]
     }
