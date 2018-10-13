@@ -50,19 +50,37 @@ where
     A: Alphabet + 'a,
     S: StateLabel<'a, A>,
 {
-    states: Vec<State<'a, A, S>>,
+    states: Vec<RegexState<'a, A, S>>,
     start: StateIdx,
     error: Option<StateIdx>,
 }
 
 /// A state in a `Dfa`.
+pub trait State<A: Alphabet, T> {
+    /// Get the `DerivativeClasses` for this state.
+    fn classes(&self) -> &DerivativeClasses<A>;
+
+    /// Get the label for this state.
+    fn label(&self) -> &T;
+
+    /// Get the index of the state to which to transisiton for a particular label.
+    ///
+    /// The relevant `TransitionLabel`'s for this state are part of the states's
+    /// `DerivativeClasses` returned by classes().
+    fn transition(&self, label: TransitionLabel) -> Option<StateIdx>;
+
+    /// Predicate to check if this state is an accepting state.
+    fn is_accepting(&self) -> bool;
+}
+
+/// A state in a `Dfa` associated with a regular expression.
 ///
 /// Each state has a label (of a type that implements `StateLabel`), a set
 /// of DerivativeClasses that map elements of the `Alphabet` to a transitions
 /// (using a TransitionLabel), and the transisitions themselves that identify
 /// the state to which the transition when for a particular subset of the `Alphabet`
 /// identifed by a particular `TransitionLabel`.
-pub struct State<'a, A, S>
+pub struct RegexState<'a, A, S>
 where
     A: Alphabet + 'a,
     S: StateLabel<'a, A>,
@@ -104,7 +122,7 @@ where
 
         // add the start state
         let mut curr = states.len();
-        states.push(State::new(start.clone(), ctx));
+        states.push(RegexState::new(start.clone(), ctx));
         map.insert(start.clone(), curr);
 
         // the explore() function from Figure 3
@@ -138,7 +156,7 @@ where
                             Vacant(vac) => {
                                 // add a new state for "derivative"
                                 let new_idx = states.len();
-                                states.push(State::new(derivative, ctx));
+                                states.push(RegexState::new(derivative, ctx));
                                 vac.insert(new_idx);
 
                                 // add a transition to the new state
@@ -178,7 +196,7 @@ where
     }
 
     /// Iterator over the states of the `Dfa`.
-    pub fn states(&self) -> impl Iterator<Item = &State<'a, A, S>> {
+    pub fn states(&self) -> impl Iterator<Item = &RegexState<'a, A, S>> {
         (&self.states).into_iter()
     }
 
@@ -206,7 +224,7 @@ where
     A: Alphabet,
     S: StateLabel<'a, A>,
 {
-    type Output = State<'a, A, S>;
+    type Output = RegexState<'a, A, S>;
 
     /// Get a `State` in the `Dfa` given its `StateIdx`.
     fn index(&self, index: StateIdx) -> &Self::Output {
@@ -214,14 +232,14 @@ where
     }
 }
 
-impl<'a, A, S> State<'a, A, S>
+impl<'a, A, S> RegexState<'a, A, S>
 where
     A: Alphabet,
     S: StateLabel<'a, A> + Clone,
 {
-    fn new(label: S, ctx: &'a RegexContext<'a, A>) -> State<'a, A, S> {
+    fn new(label: S, ctx: &'a RegexContext<'a, A>) -> RegexState<'a, A, S> {
         let classes = label.derivative_classes(ctx);
-        State {
+        RegexState {
             label,
             classes,
             ctx,
@@ -232,38 +250,44 @@ where
     fn add_transition(&mut self, label: TransitionLabel, state: StateIdx) {
         self.transitions.insert(label, state);
     }
+}
 
-    /// Get the `DerivativeClasses` for this `State`.
-    pub fn classes(&self) -> &DerivativeClasses<A> {
+impl<'a, A, S> State<A, S> for RegexState<'a, A, S>
+where
+    A: Alphabet,
+    S: StateLabel<'a, A> + Clone,
+{
+    /// Get the `DerivativeClasses` for this `RegexState`.
+    fn classes(&self) -> &DerivativeClasses<A> {
         &self.classes
     }
 
-    /// Get the label (regular expression or regular vector) for this `State`.
-    pub fn label(&self) -> &S {
+    /// Get the label (regular expression or regular vector) for this `RegexState`.
+    fn label(&self) -> &S {
         &self.label
     }
 
     /// Get the index of the state to which to transition for a particular label.
     ///
-    /// The relevant `TransitionLabel`'s for this `State` are part of the state's
+    /// The relevant `TransitionLabel`'s for this `RegexState` are part of the state's
     /// `DerivativeClasses` returned by classes().
-    pub fn transition(&self, label: TransitionLabel) -> Option<StateIdx> {
+    fn transition(&self, label: TransitionLabel) -> Option<StateIdx> {
         self.transitions.get(&label).map(|&idx| idx)
     }
 
-    /// Predicate to check if this `State` is an accepting state.
-    pub fn is_accepting(&self) -> bool {
+    /// Predicate to check if this `RegexState` is an accepting state.
+    fn is_accepting(&self) -> bool {
         self.label.clone().is_accepting(self.ctx)
     }
 }
 
-impl<'a, A, S> Debug for State<'a, A, S>
+impl<'a, A, S> Debug for RegexState<'a, A, S>
 where
     A: Alphabet + Debug + 'a,
     S: StateLabel<'a, A> + Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        f.debug_struct("State")
+        f.debug_struct("RegexState")
             .field("label", &self.label)
             .field("classes", &self.classes)
             .field("transisitons", &self.transitions)
@@ -309,7 +333,7 @@ mod test {
             ..Default::default()
         };
 
-        let sut = State::new(label.clone(), &ctx);
+        let sut = RegexState::new(label.clone(), &ctx);
 
         assert_eq!(sut.label(), &label);
     }
@@ -324,7 +348,7 @@ mod test {
             ..Default::default()
         };
 
-        let sut = State::new(label, &ctx);
+        let sut = RegexState::new(label, &ctx);
         let transitions = sut.classes().ranges().map(|(k, _)| k).collect_vec();
 
         assert_eq!(transitions, vec![A, B, C]);
@@ -336,7 +360,7 @@ mod test {
         let label = FakeLabel::default();
         let idx = StateIdx(3);
 
-        let mut sut = State::new(label, &ctx);
+        let mut sut = RegexState::new(label, &ctx);
         let tr = sut.classes().ranges().map(|(_, tr)| tr).next().unwrap();
         sut.add_transition(tr, idx);
 
