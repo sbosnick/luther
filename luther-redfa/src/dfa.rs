@@ -197,14 +197,20 @@ where
             phantom: PhantomData,
         }
     }
+}
 
+impl<A, S, T> Dfa<A, S, T>
+where
+    A: Alphabet,
+    S: State<A, T>,
+{
     /// Iterator over the states of the `Dfa`.
-    pub fn states(&self) -> impl Iterator<Item = &RegexState<'a, A, S>> {
+    pub fn states(&self) -> impl Iterator<Item = &S> {
         (&self.states).into_iter()
     }
 
     /// Iterator over the indexes of the states of the `Dfa`.
-    pub fn state_idx(&'a self) -> impl Iterator<Item = StateIdx> + 'a {
+    pub fn state_idx<'a>(&'a self) -> impl Iterator<Item = StateIdx> + 'a {
         (&self.states)
             .into_iter()
             .enumerate()
@@ -222,14 +228,14 @@ where
     }
 }
 
-impl<'a, A, S> Index<StateIdx> for Dfa<A, RegexState<'a, A, S>, S>
+impl<A, S, T> Index<StateIdx> for Dfa<A, S, T>
 where
     A: Alphabet,
-    S: StateLabel<'a, A> + Clone,
+    S: State<A, T>,
 {
-    type Output = RegexState<'a, A, S>;
+    type Output = S;
 
-    /// Get a `State` in the `Dfa` given its `StateIdx`.
+    /// Get a state in the `Dfa` given its `StateIdx`.
     fn index(&self, index: StateIdx) -> &Self::Output {
         &self.states[index.0 as usize]
     }
