@@ -20,9 +20,9 @@ from a `&str` or from a `std::io::Read` implementation.
 Add this to your `Cargo.toml`:
 
 ```toml
-[dependancies]
+[dependencies]
 luther="0.2"
-luther-dervice="0.2
+luther-derive="0.2"
 ```
 
 and this to your crate root:
@@ -56,7 +56,7 @@ fn main() {
 
     let input = "abacaccabacccc".spanned_chars();   // from luther::spanned::StrExt
 
-    let tokens = Tokens::lexer(input)
+    let tokens = Token::lexer(input)
         .map_span(|s| s.into_inner());
 
     // use tokens
