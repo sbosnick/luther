@@ -22,6 +22,10 @@ repository = "sbosnick/luther"
 name = "basic_benchmark"
 harness = false
 
+[[bench]]
+name = "regex_benchmark"
+harness = false
+
 [dependencies]
 arrayvec = "0.4.7"
 itertools = "0.7.8"
