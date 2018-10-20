@@ -14,6 +14,11 @@ extern crate criterion;
 use criterion::Criterion;
 use luther_redfa::Context;
 
+use std::alloc::System;
+
+#[global_allocator]
+static A: System = System;
+
 static DECIMAL_CONST_REGEX: &str =
     r"([1-9][0-9]*|0[0-7]*|0[xX][0-9a-fA-F]+)(([uU]([lL]|ll|LL)?)|(([lL]|ll|LL)[uU]?))?";
 

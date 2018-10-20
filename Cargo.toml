@@ -26,3 +26,6 @@ regex = "0.2.5"
 
 [workspace]
 members = ["luther-derive", "luther-redfa", "tools/testsuite"]
+
+[profile.bench]
+debug = true

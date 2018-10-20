@@ -18,6 +18,10 @@ status = "actively-developed"
 [badges.travis-ci]
 repository = "sbosnick/luther"
 
+[[bench]]
+name = "basic_benchmark"
+harness = false
+
 [dependencies]
 arrayvec = "0.4.7"
 itertools = "0.7.8"
@@ -30,7 +34,3 @@ assert_matches = "1.3"
 itertools = "0.7"
 proptest = "0.8"
 criterion = "0.2"
-
-[[bench]]
-name = "basic_benchmark"
-harness = false
