@@ -56,9 +56,7 @@ impl<'a, A: Alphabet> RegexContext<'a, A> {
     /// The empty regular expressions matches everything, including the empty
     /// string.
     pub fn empty(&'a self) -> Regex<'a, A> {
-        Regex {
-            kind: self.arena.alloc(RegexKind::Empty),
-        }
+        Regex::new( self.arena.alloc(RegexKind::Empty))
     }
 
     /// Create a character class `Regex`.
@@ -72,9 +70,7 @@ impl<'a, A: Alphabet> RegexContext<'a, A> {
         I: IntoIterator<Item = Range<A>>,
     {
         let class = ranges.into_iter().collect();
-        Regex {
-            kind: self.make_class(class),
-        }
+        Regex::new( self.make_class(class))
     }
 
     fn make_class(&'a self, class: Class<A>) -> &'a RegexKind<'a, A> {
@@ -86,21 +82,19 @@ impl<'a, A: Alphabet> RegexContext<'a, A> {
     /// The concatination regular expression matches the `lhs` regular
     /// expression followed by the `rhs` regular expression.
     pub fn concat(&'a self, lhs: Regex<'a, A>, rhs: Regex<'a, A>) -> Regex<A> {
-        if lhs.kind.is_null() || rhs.kind.is_empty_string() {
+        if lhs.kind().is_null() || rhs.kind().is_empty_string() {
             return lhs;
         };
-        if rhs.kind.is_null() || lhs.kind.is_empty_string() {
+        if rhs.kind().is_null() || lhs.kind().is_empty_string() {
             return rhs;
         };
 
-        let (first, second) = match lhs.kind {
-            RegexKind::Concat(concat) => (concat.first, self.make_concat(concat.second, rhs.kind)),
-            _ => (lhs.kind, rhs.kind),
+        let (first, second) = match lhs.kind() {
+            RegexKind::Concat(concat) => (concat.first, self.make_concat(concat.second, rhs.kind())),
+            _ => (lhs.kind(), rhs.kind()),
         };
 
-        Regex {
-            kind: self.make_concat(first, second),
-        }
+        Regex::new(self.make_concat(first, second))
     }
 
     fn make_concat(
@@ -118,13 +112,13 @@ impl<'a, A: Alphabet> RegexContext<'a, A> {
     /// the `other` regular expression. The only kind of repetition directly
     /// supported by `RegexContext` is kleene star.
     pub fn repetition(&self, other: Regex<'a, A>) -> Regex<A> {
-        let kind = match other.kind {
-            RegexKind::Repetition(_) | RegexKind::Empty => other.kind,
+        let kind = match other.kind() {
+            RegexKind::Repetition(_) | RegexKind::Empty => other.kind(),
             RegexKind::Class(class) if class.is_empty() => self.arena.alloc(RegexKind::Empty),
             _ => self.arena
-                .alloc(RegexKind::Repetition(Repetition { inner: other.kind })),
+                .alloc(RegexKind::Repetition(Repetition { inner: other.kind() })),
         };
-        Regex { kind }
+        Regex::new(kind)
     }
 
     /// Create an alternation (or logical-or) `Regex`.
@@ -132,31 +126,29 @@ impl<'a, A: Alphabet> RegexContext<'a, A> {
     /// The alternation regular expression matches either the `lhs` regular
     /// expression or the `rhs` regular expression.
     pub fn alternation(&'a self, lhs: Regex<'a, A>, rhs: Regex<'a, A>) -> Regex<A> {
-        if lhs.kind.is_null() || rhs.kind.is_complement_null() {
+        if lhs.kind().is_null() || rhs.kind().is_complement_null() {
             return rhs;
         }
-        if rhs.kind.is_null() || lhs.kind.is_complement_null() {
+        if rhs.kind().is_null() || lhs.kind().is_complement_null() {
             return lhs;
         }
-        if lhs.kind == rhs.kind {
+        if lhs.kind() == rhs.kind() {
             return lhs;
         }
-        if let (RegexKind::Class(left), RegexKind::Class(right)) = (lhs.kind, rhs.kind) {
-            return Regex {
-                kind: self.make_class(left.union(right)),
-            };
+        if let (RegexKind::Class(left), RegexKind::Class(right)) = (lhs.kind(), rhs.kind()) {
+            return Regex::new(
+                self.make_class(left.union(right)),
+            );
         }
 
         let (first, second) = order_operands(
-            lhs.kind,
-            rhs.kind,
+            lhs.kind(),
+            rhs.kind(),
             |f, s| self.make_alternation(f, s),
             get_alternation_operands,
         );
 
-        Regex {
-            kind: self.make_alternation(first, second),
-        }
+        Regex::new(self.make_alternation(first, second))
     }
 
     fn make_alternation(
@@ -173,26 +165,24 @@ impl<'a, A: Alphabet> RegexContext<'a, A> {
     /// The and regular expression matches if both the `lhs` regular
     /// expression and the `rhs` regular expressions match.
     pub fn and(&'a self, lhs: Regex<'a, A>, rhs: Regex<'a, A>) -> Regex<A> {
-        if lhs.kind.is_null() || rhs.kind.is_complement_null() {
+        if lhs.kind().is_null() || rhs.kind().is_complement_null() {
             return lhs;
         }
-        if rhs.kind.is_null() || lhs.kind.is_complement_null() {
+        if rhs.kind().is_null() || lhs.kind().is_complement_null() {
             return rhs;
         }
-        if lhs.kind == rhs.kind {
+        if lhs.kind() == rhs.kind() {
             return lhs;
         }
 
         let (first, second) = order_operands(
-            lhs.kind,
-            rhs.kind,
+            lhs.kind(),
+            rhs.kind(),
             |first, second| self.make_and(first, second),
             get_and_operands,
         );
 
-        Regex {
-            kind: self.make_and(first, second),
-        }
+        Regex::new(self.make_and(first, second))
     }
 
     fn make_and(
@@ -208,13 +198,13 @@ impl<'a, A: Alphabet> RegexContext<'a, A> {
     /// The complement regular expression matches everything that the supplied
     /// `other` regular expression does not match.
     pub fn complement(&'a self, other: Regex<'a, A>) -> Regex<A> {
-        let kind = match other.kind {
+        let kind = match other.kind() {
             RegexKind::Complement(complement) => complement.inner,
             RegexKind::Class(class) => self.make_class(class.complement()),
-            _ => self.make_complement(other.kind),
+            _ => self.make_complement(other.kind()),
         };
 
-        Regex { kind }
+        Regex::new(kind)
     }
 
     fn make_complement(&'a self, inner: &'a RegexKind<'a, A>) -> &'a RegexKind<'a, A> {
@@ -228,7 +218,7 @@ impl<'a, A: Alphabet> RegexContext<'a, A> {
         I: Iterator<Item = Regex<'a, A>>,
     {
         RegexVec {
-            vec: self.arena.alloc_extend(iter.map(|r| (*r.kind).clone())),
+            vec: self.arena.alloc_extend(iter.map(|r| (*r.kind()).clone())),
         }
     }
 }
@@ -246,6 +236,10 @@ pub struct Regex<'a, A: 'a + Alphabet> {
 }
 
 impl<'a, A: Alphabet> Regex<'a, A> {
+    fn new(kind: &'a RegexKind<'a, A>) -> Self {
+        Regex{ kind }
+    }
+
     /// Get the kind of the regular expression.
     pub fn kind(&self) -> &'a RegexKind<'a, A> {
         &self.kind
@@ -369,7 +363,7 @@ impl<'a, A: Alphabet> RegexVec<'a, A> {
     {
         // the iterator is relalized into v incase f() calls a method on ctx
         // which would panic if it is done inside of ctx.vec().
-        let v: Vec<_> = self.vec.iter().map(|rek| f(Regex { kind: rek })).collect();
+        let v: Vec<_> = self.vec.iter().map(|rek| f(Regex::new(rek))).collect();
         ctx.vec(v.into_iter())
     }
 
@@ -378,7 +372,7 @@ impl<'a, A: Alphabet> RegexVec<'a, A> {
     where
         P: Fn(Regex<'a, A>) -> bool,
     {
-        self.vec.iter().any(|rek| p(Regex { kind: rek }))
+        self.vec.iter().any(|rek| p(Regex::new(rek)))
     }
 
     /// Maps the elements of this `RegexVec` to another type.
@@ -386,7 +380,7 @@ impl<'a, A: Alphabet> RegexVec<'a, A> {
     where
         F: Fn(Regex<'a, A>) -> R,
     {
-        self.vec.iter().map(move |rek| f(Regex { kind: rek }))
+        self.vec.iter().map(move |rek| f(Regex::new(rek)))
     }
 }
 
@@ -472,7 +466,7 @@ pub struct Complement<'a, A: 'a + Alphabet> {
 impl<'a, A: Alphabet> Complement<'a, A> {
     /// Get the inner regular expression that is being complemented.
     pub fn inner(&'a self) -> Regex<'a, A> {
-        Regex { kind: self.inner }
+        Regex::new(self.inner)
     }
 }
 
@@ -485,7 +479,7 @@ pub struct Repetition<'a, A: 'a + Alphabet> {
 impl<'a, A: Alphabet> Repetition<'a, A> {
     /// Get the inner regular expression that is being repeated.
     pub fn inner(&'a self) -> Regex<'a, A> {
-        Regex { kind: self.inner }
+        Regex::new(self.inner)
     }
 }
 
@@ -500,12 +494,12 @@ pub struct Alternation<'a, A: 'a + Alphabet> {
 impl<'a, A: Alphabet> Alternation<'a, A> {
     /// Get the first of the regular expression alternative.
     pub fn first(&'a self) -> Regex<'a, A> {
-        Regex { kind: self.first }
+        Regex::new(self.first)
     }
 
     /// Get the second of the regular expression alternative.
     pub fn second(&'a self) -> Regex<'a, A> {
-        Regex { kind: self.second }
+        Regex::new(self.second)
     }
 }
 
@@ -520,12 +514,12 @@ pub struct And<'a, A: 'a + Alphabet> {
 impl<'a, A: Alphabet> And<'a, A> {
     /// Get the first of the regular expressions being anded.
     pub fn first(&'a self) -> Regex<'a, A> {
-        Regex { kind: self.first }
+        Regex::new(self.first)
     }
 
     /// Get the second of the regular expressions being anded.
     pub fn second(&'a self) -> Regex<'a, A> {
-        Regex { kind: self.second }
+        Regex::new(self.second)
     }
 }
 
@@ -540,12 +534,12 @@ pub struct Concat<'a, A: 'a + Alphabet> {
 impl<'a, A: Alphabet> Concat<'a, A> {
     /// Gets the first of the regular expressons being concatenated.
     pub fn first(&'a self) -> Regex<'a, A> {
-        Regex { kind: self.first }
+        Regex::new(self.first)
     }
 
     /// Get the second of the regular expressions being concatenated.
     pub fn second(&'a self) -> Regex<'a, A> {
-        Regex { kind: self.second }
+        Regex::new(self.second)
     }
 }
 
@@ -869,9 +863,9 @@ mod test {
         let ctx = RegexContext::new();
         let class = ctx.class(iter::once(Range::new('a', 'c')));
         // this forced formulation avoids simplifications that are not the sut
-        let neg_class = Regex {
-            kind: ctx.make_complement(ctx.class(iter::once(Range::new('f', 'z'))).kind),
-        };
+        let neg_class = Regex::new(
+            ctx.make_complement(ctx.class(iter::once(Range::new('f', 'z'))).kind()),
+        );
         let rep_class = ctx.repetition(ctx.class(iter::once(Range::new('A', 'Z'))));
 
         let sut1 = ctx.alternation(
