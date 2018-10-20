@@ -30,6 +30,10 @@ use alphabet::Alphabet;
 use partition::{PartitionMap, PartitionSet, PartitionSetRangeIter};
 use typed_arena::Arena;
 
+mod handle;
+
+pub use self::handle::Regex;
+
 /// A context for creating regular expressions.
 ///
 /// The factory methods in `RegexContext` create different kinds of `Regex` but
@@ -220,29 +224,6 @@ impl<'a, A: Alphabet> RegexContext<'a, A> {
         RegexVec {
             vec: self.arena.alloc_extend(iter.map(|r| (*r.kind()).clone())),
         }
-    }
-}
-
-/// A regular expression.
-///
-/// A `Regex` is created by the factory methods in `RegexContext` and is
-/// associated with that context. It is not possible to create a `Regex`
-/// directly. It is also not possible to create a `Regex` from a `RegexKind` in
-/// order to allow `RegexContext` to maintain certain regular expressions in
-/// cannonical form.
-#[derive(Debug, PartialEq, Clone, Copy, Hash, Eq)]
-pub struct Regex<'a, A: 'a + Alphabet> {
-    kind: &'a RegexKind<'a, A>,
-}
-
-impl<'a, A: Alphabet> Regex<'a, A> {
-    fn new(kind: &'a RegexKind<'a, A>) -> Self {
-        Regex{ kind }
-    }
-
-    /// Get the kind of the regular expression.
-    pub fn kind(&self) -> &'a RegexKind<'a, A> {
-        &self.kind
     }
 }
 
