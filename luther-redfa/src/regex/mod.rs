@@ -21,17 +21,16 @@
 //! directly from a `RegexKind<A>`. The required use of factory methods allows for
 //! mataining the regular expressons in cannonical form.
 
-use std::fmt::{self, Debug, Display};
-use std::iter::FromIterator;
+use std::fmt::{self, Display};
 use std::ops::Index;
-use std::rc::Rc;
 
 use alphabet::Alphabet;
-use partition::{PartitionMap, PartitionSet, PartitionSetRangeIter};
 use typed_arena::Arena;
 
+mod class;
 mod handle;
 
+pub use self::class::{Class, Range, Ranges};
 pub use self::handle::Regex;
 
 /// A context for creating regular expressions.
@@ -373,70 +372,6 @@ impl<'a, A: Alphabet> Index<usize> for RegexVec<'a, A> {
     }
 }
 
-/// A (possibly empty) subset of the alphabet `A`.
-#[derive(Debug, PartialEq, PartialOrd, Hash, Eq, Clone)]
-pub struct Class<A: Alphabet> {
-    set: Rc<PartitionSet<A>>,
-}
-
-impl<A: Alphabet> Class<A> {
-    /// Get an iterator over the closed ranges that make up the `Class`.
-    ///
-    /// The ranges returned by the iterator will be non-overlapping ranges
-    /// and will be in increasing order. Adjacent ranges will also be combined.
-    pub fn ranges<'a>(&'a self) -> Ranges<'a, A> {
-        Ranges {
-            inner: self.set.into_iter(),
-        }
-    }
-
-    /// Check if the subset of `A` is empty.
-    pub fn is_empty(&self) -> bool {
-        self.set.is_empty()
-    }
-
-    /// Check if the subset of `A` is the complement of the empty set
-    /// (i.e. it is every element in `A`).
-    pub fn is_complement_empty(&self) -> bool {
-        self.set.is_complement_empty()
-    }
-
-    /// Check if the class contains the character `c`.
-    pub fn contains(&self, c: &A) -> bool {
-        self.set.contains(c)
-    }
-
-    fn union(&self, other: &Class<A>) -> Class<A> {
-        Class {
-            set: Rc::new(self.set.union(&other.set)),
-        }
-    }
-
-    fn complement(&self) -> Class<A> {
-        Class {
-            set: Rc::new(self.set.complement()),
-        }
-    }
-
-    pub(crate) fn into_partition_map<V>(&self, in_value: V, out_value: V) -> PartitionMap<A, V>
-    where
-        V: Debug + Clone + PartialEq,
-    {
-        self.set.into_map(in_value, out_value)
-    }
-}
-
-impl<A: Alphabet> FromIterator<Range<A>> for Class<A> {
-    fn from_iter<T>(iter: T) -> Self
-    where
-        T: IntoIterator<Item = Range<A>>,
-    {
-        Class {
-            set: Rc::new(iter.into_iter().collect()),
-        }
-    }
-}
-
 /// A regular expression holder for which the complement (or negation) has been
 /// taken.
 #[derive(Debug, PartialEq, PartialOrd, Hash, Eq, Clone)]
@@ -521,83 +456,6 @@ impl<'a, A: Alphabet> Concat<'a, A> {
     /// Get the second of the regular expressions being concatenated.
     pub fn second(&'a self) -> Regex<'a, A> {
         Regex::new(self.second)
-    }
-}
-
-/// An iterator over the closed ranges of a class.
-///
-/// This is the return type of the `Class<A>::ranges()` method.
-pub struct Ranges<'a, A: 'a + Alphabet> {
-    inner: PartitionSetRangeIter<'a, A>,
-}
-
-impl<'a, A: Alphabet> Iterator for Ranges<'a, A> {
-    type Item = Range<A>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
-    }
-}
-
-/// An inclusive range of charaters from the alphabet `A`.
-#[derive(Debug, PartialEq, Clone)]
-pub struct Range<A: Alphabet> {
-    start: A,
-    end: A,
-}
-
-impl<A: Alphabet> Range<A> {
-    /// Creates a new range of characters.
-    ///
-    /// If `end` is less than the `start` then they will be reversed.
-    pub fn new(start: A, end: A) -> Range<A> {
-        if end < start {
-            Range {
-                start: end,
-                end: start,
-            }
-        } else {
-            Range { start, end }
-        }
-    }
-
-    /// The start of the range of characters.
-    ///
-    /// The start is included in the range.
-    pub fn start(&self) -> A {
-        self.start.clone()
-    }
-
-    /// The end of the range of characters.
-    ///
-    /// The end is included in the range.
-    pub fn end(&self) -> A {
-        self.end.clone()
-    }
-
-    pub(crate) fn coalesce(&self, other: &Self) -> Result<Self, (Self, Self)> {
-        let (anchor, comp) = if self.start <= other.start {
-            (self, other)
-        } else {
-            (other, self)
-        };
-
-        comp.start
-            .decrement()
-            .and_then(|start| {
-                if start <= anchor.end {
-                    Some(Range::new(anchor.start.clone(), comp.end.clone()))
-                } else {
-                    None
-                }
-            })
-            .ok_or_else(|| (self.clone(), other.clone()))
-    }
-}
-
-impl<'a, A: Alphabet> PartialEq<Range<A>> for &'a Range<A> {
-    fn eq(&self, other: &Range<A>) -> bool {
-        self.start == other.start && self.end == other.end
     }
 }
 
