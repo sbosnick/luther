@@ -60,7 +60,7 @@ impl<'a, A: Alphabet> RegexContext<'a, A> {
     /// The empty regular expressions matches everything, including the empty
     /// string.
     pub fn empty(&'a self) -> Regex<'a, A> {
-        Regex::new( self.arena.alloc(RegexKind::Empty))
+        Regex::empty()
     }
 
     /// Create a character class `Regex`.
