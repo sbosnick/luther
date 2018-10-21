@@ -19,6 +19,20 @@ pub struct Class<A: Alphabet> {
     set: Rc<PartitionSet<A>>,
 }
 
+/// An iterator over the closed ranges of a class.
+///
+/// This is the return type of the `Class<A>::ranges()` method.
+pub struct Ranges<'a, A: 'a + Alphabet> {
+    inner: PartitionSetRangeIter<'a, A>,
+}
+
+/// An inclusive range of charaters from the alphabet `A`.
+#[derive(Debug, PartialEq, Clone)]
+pub struct Range<A: Alphabet> {
+    start: A,
+    end: A,
+}
+
 impl<A: Alphabet> Class<A> {
     /// Get an iterator over the closed ranges that make up the `Class`.
     ///
@@ -77,26 +91,12 @@ impl<A: Alphabet> FromIterator<Range<A>> for Class<A> {
     }
 }
 
-/// An iterator over the closed ranges of a class.
-///
-/// This is the return type of the `Class<A>::ranges()` method.
-pub struct Ranges<'a, A: 'a + Alphabet> {
-    inner: PartitionSetRangeIter<'a, A>,
-}
-
 impl<'a, A: Alphabet> Iterator for Ranges<'a, A> {
     type Item = Range<A>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next()
     }
-}
-
-/// An inclusive range of charaters from the alphabet `A`.
-#[derive(Debug, PartialEq, Clone)]
-pub struct Range<A: Alphabet> {
-    start: A,
-    end: A,
 }
 
 impl<A: Alphabet> Range<A> {
