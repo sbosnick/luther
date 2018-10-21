@@ -18,30 +18,21 @@ use regex::RegexKind;
 /// cannonical form.
 #[derive(Debug, PartialEq, Clone, Copy, Hash, Eq)]
 pub struct Regex<'a, A: 'a + Alphabet> {
-    typ: RegexType<'a, A>,
+    kind: Option<&'a RegexKind<'a, A>>,
 }
 
 impl<'a, A: Alphabet> Regex<'a, A> {
     pub(super) fn new(kind: &'a RegexKind<'a, A>) -> Self {
-        Regex{ typ: RegexType::Normal(kind) }
+        Regex{kind: Some(kind)}
+
     }
 
     pub(super) fn empty() -> Self {
-        Regex{ typ: RegexType::Empty }
+        Regex{ kind: None }
     }
 
     /// Get the kind of the regular expression.
     pub fn kind(&self) -> &'a RegexKind<'a, A> {
-        match self.typ {
-            RegexType::Normal(k) => &k,
-            RegexType::Empty => &RegexKind::Empty,
-        }
+        self.kind.unwrap_or(&RegexKind::Empty)
     }
-}
-
-#[derive(Debug, PartialEq, Clone, Copy, Hash, Eq)]
-enum RegexType<'a, A: 'a + Alphabet> {
-    Empty,
-    //Null,
-    Normal(&'a RegexKind<'a, A>)
 }
