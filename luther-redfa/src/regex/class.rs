@@ -16,14 +16,14 @@ use partition::{PartitionMap, PartitionSet, PartitionSetRangeIter};
 /// A (possibly empty) subset of the alphabet `A`.
 #[derive(Debug, PartialEq, PartialOrd, Hash, Eq, Clone)]
 pub struct Class<A: Alphabet> {
-    set: Rc<PartitionSet<A>>,
+    set: Option<Rc<PartitionSet<A>>>,
 }
 
 /// An iterator over the closed ranges of a class.
 ///
 /// This is the return type of the `Class<A>::ranges()` method.
 pub struct Ranges<'a, A: 'a + Alphabet> {
-    inner: PartitionSetRangeIter<'a, A>,
+    inner: Option<PartitionSetRangeIter<'a, A>>,
 }
 
 /// An inclusive range of charaters from the alphabet `A`.
@@ -40,35 +40,46 @@ impl<A: Alphabet> Class<A> {
     /// and will be in increasing order. Adjacent ranges will also be combined.
     pub fn ranges<'a>(&'a self) -> Ranges<'a, A> {
         Ranges {
-            inner: self.set.into_iter(),
+            inner: match self.set {
+                Some(ref set) => Some(set.into_iter()),
+                None => None,
+            }
         }
     }
 
     /// Check if the subset of `A` is empty.
     pub fn is_empty(&self) -> bool {
-        self.set.is_empty()
+        self.set.is_none()
     }
 
     /// Check if the subset of `A` is the complement of the empty set
     /// (i.e. it is every element in `A`).
     pub fn is_complement_empty(&self) -> bool {
-        self.set.is_complement_empty()
+        self.set.as_ref().map_or(false, |set| set.is_complement_empty())
     }
 
     /// Check if the class contains the character `c`.
     pub fn contains(&self, c: &A) -> bool {
-        self.set.contains(c)
+        self.set.as_ref().map_or(false, |set| set.contains(c))
     }
 
     pub(super) fn union(&self, other: &Class<A>) -> Class<A> {
-        Class {
-            set: Rc::new(self.set.union(&other.set)),
-        }
+        let set = match (self.set.as_ref(), other.set.as_ref()) {
+            (Some(selfset), Some(otherset)) => Some(Rc::new(selfset.union(&otherset))),
+            (None, Some(set)) => Some(set.clone()),
+            (Some(set), None) => Some(set.clone()),
+            (None, None) => None,
+        };
+
+        Class{ set }
     }
 
     pub(super) fn complement(&self) -> Class<A> {
         Class {
-            set: Rc::new(self.set.complement()),
+            set: self.set.as_ref().map_or_else(
+                     || Some( Rc::new( PartitionSet::new(..))),
+                     |set| Some( Rc::new(set.complement())),
+                 )
         }
     }
 
@@ -76,7 +87,10 @@ impl<A: Alphabet> Class<A> {
     where
         V: Debug + Clone + PartialEq,
     {
-        self.set.into_map(in_value, out_value)
+        match self.set.as_ref() {
+            Some(set) => set.into_map(in_value, out_value),
+            None => PartitionMap::new(.., out_value, in_value),
+        }
     }
 }
 
@@ -85,8 +99,13 @@ impl<A: Alphabet> FromIterator<Range<A>> for Class<A> {
     where
         T: IntoIterator<Item = Range<A>>,
     {
+        let mut iter = iter.into_iter().peekable();
         Class {
-            set: Rc::new(iter.into_iter().collect()),
+            set: if iter.peek().is_none() {
+                None
+            } else {
+                Some(Rc::new(iter.into_iter().collect()))
+            }
         }
     }
 }
@@ -95,7 +114,7 @@ impl<'a, A: Alphabet> Iterator for Ranges<'a, A> {
     type Item = Range<A>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
+        self.inner.as_mut().and_then(|inner| inner.next())
     }
 }
 
