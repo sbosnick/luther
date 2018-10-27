@@ -27,7 +27,7 @@ pub struct PartitionSet<U> {
 }
 
 impl<U: Alphabet> PartitionSet<U> {
-    pub fn full_singlton() -> PartitionSet<U> {
+    pub fn full_singleton() -> PartitionSet<U> {
         PartitionSet {
             map: PartitionMap::new(.., true, false),
         }
