@@ -77,7 +77,7 @@ impl<A: Alphabet> Class<A> {
     pub(super) fn complement(&self) -> Class<A> {
         Class {
             set: self.set.as_ref().map_or_else(
-                     || Some( Rc::new( PartitionSet::new(..))),
+                     || Some( Rc::new( PartitionSet::full_singlton())),
                      |set| Some( Rc::new(set.complement())),
                  )
         }

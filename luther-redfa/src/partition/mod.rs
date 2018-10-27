@@ -566,7 +566,6 @@ mod test {
     // Simple types for use in unit tests
 
     type TestPM<V> = PartitionMap<TestAlpha, V>;
-    type TestPS = PartitionSet<TestAlpha>;
 
     // Unit tests
 
@@ -980,8 +979,9 @@ mod test {
     #[test]
     fn patition_set_contains_expected_values() {
         use testutils::TestAlpha::*;
+        let range = vec![Range::new(B, C)];
 
-        let sut = TestPS::new(B..D);
+        let sut = PartitionSet::from_iter(range);
 
         assert!(!sut.contains(&A));
         assert!(sut.contains(&B));

@@ -11,7 +11,6 @@ use std::iter::FromIterator;
 
 use alphabet::Alphabet;
 use partition::{PartitionMap, PartitionMapRangeIter};
-use range::RangeArgument;
 use regex::Range;
 
 /// A `PartitionSet` is a set of `U` implemented in terms of a `PartitionMap` to
@@ -28,9 +27,9 @@ pub struct PartitionSet<U> {
 }
 
 impl<U: Alphabet> PartitionSet<U> {
-    pub fn new<R: RangeArgument<U>>(range: R) -> PartitionSet<U> {
+    pub fn full_singlton() -> PartitionSet<U> {
         PartitionSet {
-            map: PartitionMap::new(range, true, false),
+            map: PartitionMap::new(.., true, false),
         }
     }
 
