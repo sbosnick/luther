@@ -13,8 +13,7 @@ use alphabet::Alphabet;
 use partition::{PartitionMap, PartitionMapRangeIter};
 use regex::Range;
 
-/// A `PartitionSet` is a set of `U` implemented in terms of a `PartitionMap` to
-/// `bool`.
+/// A `PartitionSet` is a set of `U`.
 ///
 /// # Type Parameter
 /// | U | The universe to partition to determine set membership |
@@ -57,7 +56,20 @@ impl<U: Alphabet> PartitionSet<U> {
     where
         V: Debug + Clone + PartialEq,
     {
-        PartitionMap::from_partition_map_to_bool(&self.map, in_value, out_value)
+        PartitionMap {
+            map: self.map.ranges()
+                .map(|(u, v)| {
+                    (
+                        u.clone(),
+                        if *v {
+                            in_value.clone()
+                        } else {
+                            out_value.clone()
+                        },
+                    )
+                })
+                .collect(),
+        }
     }
 }
 

@@ -103,28 +103,6 @@ where
         PartitionMap { map }
     }
 
-    fn from_partition_map_to_bool(
-        source: &PartitionMap<U, bool>,
-        in_value: V,
-        out_value: V,
-    ) -> PartitionMap<U, V> {
-        PartitionMap {
-            map: source
-                .ranges()
-                .map(|(u, v)| {
-                    (
-                        u.clone(),
-                        if *v {
-                            in_value.clone()
-                        } else {
-                            out_value.clone()
-                        },
-                    )
-                })
-                .collect(),
-        }
-    }
-
     /// Gets the value associated with an element of U.
     pub fn get(&self, u: &U) -> &V {
         self.map
@@ -880,17 +858,17 @@ mod test {
     }
 
     #[test]
-    fn partition_map_from_map_to_bool_get_expected_values() {
+    fn partition_set_into_map_gets_expected_values() {
         use testutils::TestAlpha::*;
-        let source = TestPM::new(B..D, true, false);
 
-        let sut = TestPM::from_partition_map_to_bool(&source, 0, 1);
+        let sut = PartitionSet::from_iter(vec![Range::new(B, C)]);
+        let map = sut.into_map(0, 1);
 
-        assert_eq!(*sut.get(&A), 1);
-        assert_eq!(*sut.get(&B), 0);
-        assert_eq!(*sut.get(&C), 0);
-        assert_eq!(*sut.get(&D), 1);
-        assert_eq!(*sut.get(&E), 1);
+        assert_eq!(*map.get(&A), 1);
+        assert_eq!(*map.get(&B), 0);
+        assert_eq!(*map.get(&C), 0);
+        assert_eq!(*map.get(&D), 1);
+        assert_eq!(*map.get(&E), 1);
     }
 
     #[test]
@@ -1081,60 +1059,6 @@ mod test {
             for op in ops {
                 pm = op.run(&pm);
             }
-
-            for (first, second) in pm.map.values().tuple_windows() {
-                prop_assert_ne!(first, second);
-            }
-        }
-
-        #[test]
-        fn prop_merged_partition_map_contains_min_value(
-            pm_left in arb_partition_map(),
-            ops_left in arb_pm_op_vector(),
-            pm_right in arb_partition_map(),
-            ops_right in arb_pm_op_vector()
-            )
-        {
-            let mut pm_left = pm_left.clone();
-            for op in ops_left {
-                pm_left = op.run(&pm_left);
-            }
-
-            let mut pm_right = pm_right.clone();
-            for op in ops_right {
-                pm_right = op.run(&pm_right);
-            }
-
-            let mut merge = Value(0);
-            let pm = PartitionMap::from_merge(
-                PartitionMap::from_partition_map_to_bool(&pm_left, 0, 1),
-                PartitionMap::from_partition_map_to_bool(&pm_right, 0, 1), &mut merge);
-
-            prop_assert!(pm.map.contains_key(&0));
-        }
-
-        #[test]
-        fn prop_merged_partition_map_values_alternate(
-            pm_left in arb_partition_map(),
-            ops_left in arb_pm_op_vector(),
-            pm_right in arb_partition_map(),
-            ops_right in arb_pm_op_vector()
-            )
-        {
-            let mut pm_left = pm_left.clone();
-            for op in ops_left {
-                pm_left = op.run(&pm_left);
-            }
-
-            let mut pm_right = pm_right.clone();
-            for op in ops_right {
-                pm_right = op.run(&pm_right);
-            }
-
-            let mut merge = Value(0);
-            let pm = PartitionMap::from_merge(
-                PartitionMap::from_partition_map_to_bool(&pm_left, 0, 1),
-                PartitionMap::from_partition_map_to_bool(&pm_right, 0, 1), &mut merge);
 
             for (first, second) in pm.map.values().tuple_windows() {
                 prop_assert_ne!(first, second);
