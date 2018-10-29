@@ -56,20 +56,26 @@ impl<U: Alphabet> PartitionSet<U> {
     where
         V: Debug + Clone + PartialEq,
     {
-        PartitionMap {
-            map: self.map.ranges()
-                .map(|(u, v)| {
+        use self::ElementStatus::*;
+
+        PartitionMap::from_lower_bound_iter(
+                self.lower_bound_iter()
+                .map(|(u, status)| {
                     (
-                        u.clone(),
-                        if *v {
-                            in_value.clone()
-                        } else {
-                            out_value.clone()
+                        u, 
+                        match status {
+                            Included => in_value.clone(),
+                            Excluded => out_value.clone(),
                         },
                     )
                 })
-                .collect(),
-        }
+        )
+
+    }
+
+    pub fn lower_bound_iter<'a>(&'a self) -> impl Iterator<Item=(U, ElementStatus)> + 'a {
+        self.map.ranges()
+            .map(|(u,v)| (u.clone(), if *v { ElementStatus::Included } else { ElementStatus::Excluded}))
     }
 }
 
@@ -93,6 +99,11 @@ impl<'a, U: Alphabet> IntoIterator for &'a PartitionSet<U> {
             inner: self.map.range_iter(),
         }
     }
+}
+
+pub enum ElementStatus {
+    Included,
+    Excluded,
 }
 
 pub struct PartitionSetRangeIter<'a, U: 'a + Alphabet> {

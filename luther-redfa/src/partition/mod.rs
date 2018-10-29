@@ -103,6 +103,16 @@ where
         PartitionMap { map }
     }
 
+    /// Creates a new `PartitionMap` from the ranges identifed by the consectutive lower bound,
+    /// value pairs.
+    pub fn from_lower_bound_iter<I>(iter: I) -> PartitionMap<U,V> 
+        where I: IntoIterator<Item=(U,V)>,
+    {
+        PartitionMap {
+            map: iter.into_iter().collect(),
+        }
+    }
+
     /// Gets the value associated with an element of U.
     pub fn get(&self, u: &U) -> &V {
         self.map
