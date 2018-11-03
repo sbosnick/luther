@@ -548,7 +548,6 @@ mod test {
     use itertools::Itertools;
     use proptest::collection;
     use proptest::prelude::*;
-    use std::iter;
     use testutils::*;
 
     // Simple types for use in unit tests
@@ -868,20 +867,6 @@ mod test {
     }
 
     #[test]
-    fn partition_set_into_map_gets_expected_values() {
-        use testutils::TestAlpha::*;
-
-        let sut = PartitionSet::from_iter(vec![Range::new(B, C)]);
-        let map = sut.into_map(0, 1);
-
-        assert_eq!(*map.get(&A), 1);
-        assert_eq!(*map.get(&B), 0);
-        assert_eq!(*map.get(&C), 0);
-        assert_eq!(*map.get(&D), 1);
-        assert_eq!(*map.get(&E), 1);
-    }
-
-    #[test]
     fn union_interval_iter_has_sticky_true() {
         use testutils::TestAlpha::*;
         let left = vec![(&A, &true), (&B, &false)].into_iter();
@@ -962,29 +947,6 @@ mod test {
         let result: Vec<_> = sut.range_iter().collect();
 
         assert_eq!(result, ranges);
-    }
-
-    #[test]
-    fn patition_set_contains_expected_values() {
-        use testutils::TestAlpha::*;
-        let range = vec![Range::new(B, C)];
-
-        let sut = PartitionSet::from_iter(range);
-
-        assert!(!sut.contains(&A));
-        assert!(sut.contains(&B));
-        assert!(sut.contains(&C));
-        assert!(!sut.contains(&D));
-        assert!(!sut.contains(&E));
-    }
-
-    #[test]
-    fn patition_set_from_empty_ranges_is_empty() {
-        let range = iter::empty::<Range<u8>>();
-
-        let sut: PartitionSet<_> = range.collect();
-
-        assert_eq!(sut.into_iter().count(), 0);
     }
 
     // Types and Strategy defintions for property tests

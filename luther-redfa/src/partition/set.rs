@@ -117,3 +117,83 @@ impl<'a, U: Alphabet> Iterator for PartitionSetRangeIter<'a, U> {
         self.inner.next()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::iter;
+    use testutils;
+
+    #[test]
+    fn partition_set_into_map_gets_expected_values() {
+        use testutils::TestAlpha::*;
+
+        let sut = PartitionSet::from_iter(vec![Range::new(B, C)]);
+        let map = sut.into_map(0, 1);
+
+        assert_eq!(*map.get(&A), 1);
+        assert_eq!(*map.get(&B), 0);
+        assert_eq!(*map.get(&C), 0);
+        assert_eq!(*map.get(&D), 1);
+        assert_eq!(*map.get(&E), 1);
+    }
+
+    #[test]
+    fn partition_set_contains_expected_values() {
+        use testutils::TestAlpha::*;
+        let range = vec![Range::new(B, C)];
+
+        let sut = PartitionSet::from_iter(range);
+
+        assert!(!sut.contains(&A));
+        assert!(sut.contains(&B));
+        assert!(sut.contains(&C));
+        assert!(!sut.contains(&D));
+        assert!(!sut.contains(&E));
+    }
+
+    #[test]
+    fn partition_set_from_empty_ranges_is_empty() {
+        let range = iter::empty::<Range<u8>>();
+
+        let sut: PartitionSet<_> = range.collect();
+
+        assert_eq!(sut.into_iter().count(), 0);
+    }
+
+    #[test]
+    fn partition_set_full_singleton_contains_all_values() {
+        use testutils::TestAlpha::*;
+
+        let sut = PartitionSet::full_singleton();
+
+        assert!(sut.contains(&A));
+        assert!(sut.contains(&B));
+        assert!(sut.contains(&C));
+        assert!(sut.contains(&D));
+        assert!(sut.contains(&E));
+    }
+
+    #[test]
+    fn partition_set_complement_of_empty_is_complement_empty() {
+        let range = iter::empty::<Range<testutils::TestAlpha>>();
+
+        let sut: PartitionSet<_> = range.collect();
+        let complement = sut.complement();
+
+        assert!(complement.is_complement_empty());
+    }
+
+    #[test]
+    fn partition_set_union_iterates_expected_values() {
+        use testutils::TestAlpha::*;
+        let set1 = PartitionSet::from_iter(vec![Range::new(B, C)]);
+        let set2 = PartitionSet::from_iter(vec![Range::new(C, D)]);
+
+        let sut = set1.union(&set2);
+        let results: Vec<_> = sut.into_iter().collect();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0], Range::new(B, D));
+    }
+}
