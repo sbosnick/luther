@@ -7,10 +7,14 @@
 // except according to those terms
 
 use std::fmt::Debug;
-use std::iter::FromIterator;
+use std::iter::{self, FromIterator};
+use std::slice;
+
+use arrayvec::ArrayVec;
+use itertools::{self, Itertools, EitherOrBoth};
 
 use alphabet::Alphabet;
-use partition::{PartitionMap, PartitionMapRangeIter};
+use partition::PartitionMap;
 use regex::Range;
 
 /// A `PartitionSet` is a set of `U`.
@@ -22,33 +26,98 @@ use regex::Range;
 /// likely that most useful types for U are `Copy`. U must also be an `Alphabet`.
 #[derive(Clone, Debug, PartialEq, PartialOrd, Hash, Eq)]
 pub struct PartitionSet<U> {
-    map: PartitionMap<U, bool>,
+    ranges: Vec<U>,
 }
 
+// The implementation uses a vector of U to represent the included and excluded
+// ranges in the set (hence why the vector is called 'ranges'). The elements of the
+// vector are the inclusive lower bound of the range where the exclusive upper bound
+// is the lower bound of the next range (or one past U::max_value() for the last element
+// of the vector). The vector is sorted in increasing order and each lower bound appears
+// at most once.
+//
+// The even numbered indexes of 'ranges' are the included ranges and the odd numbered
+// indexes are the excluded ranges. If 'ranges.len() == 0' or if 'ranges[0] != U::min_value()'
+// then there is an implicit first range starting at U::min_value() that is excluded.
 impl<U: Alphabet> PartitionSet<U> {
     pub fn full_singleton() -> PartitionSet<U> {
         PartitionSet {
-            map: PartitionMap::new(.., true, false),
+            ranges: vec![U::min_value()],
         }
     }
 
     pub fn contains(&self, u: &U) -> bool {
-        self.map.get(u).clone()
+        match self.ranges.binary_search(u) {
+            Ok(idx) => idx %2 == 0,
+            Err(idx) => idx %2 == 1,
+        }
     }
 
     pub fn is_complement_empty(&self) -> bool {
-        self.map.is_complement_empty()
+        self.ranges.len() == 1 && self.ranges.contains(&U::min_value())
     }
 
     pub fn union(&self, other: &PartitionSet<U>) -> PartitionSet<U> {
+        use itertools::EitherOrBoth::{Left, Right, Both};
+        use self::ElementStatus::Included;
+
         PartitionSet {
-            map: self.map.union(&other.map),
+            ranges: itertools::merge_join_by(
+                        self.ranges.iter().enumerate(),
+                        other.ranges.iter().enumerate(), 
+                        |(_, l), (_, r)| l.cmp(r))
+                .peekable()
+                .batching(|it| {
+                    match it.next() {
+                        None => None,
+                        Some(Left((i, v))) => {
+                            if i % 2 == 0 {
+                                let last = skip_while(it, is_right, union_in_or_out);
+                                if last == Included && is_left_excluded(it.peek()) {
+                                    it.next();
+                                }
+                            }
+                            Some(v)
+                        }
+                        Some(Right((i,v))) => {
+                            if i % 2 == 0 {
+                                let last = skip_while(it, is_left, union_in_or_out);
+                                if last == Included && is_right_excluded(it.peek()) {
+                                    it.next();
+                                }
+                            }
+                            Some(v)
+                        }
+                        Some(Both((i,v), (j,_))) => {
+                            match (i % 2 == 0, j % 2 == 0) {
+                                (true, true) => {
+                                    if let Some(EitherOrBoth::Left(_)) = it.peek() {
+                                        skip_while(it, is_left, union_in_or_out);
+                                    }
+                                    if let Some(EitherOrBoth::Right(_)) = it.peek() {
+                                        skip_while(it, is_right, union_in_or_out);
+                                    }
+                                }
+                                (true, false) => {skip_while(it, is_right, union_in_or_out);}
+                                (false, true) => {skip_while(it, is_left, union_in_or_out);}
+                                (false, false) => {}
+                            }
+                            Some(v)
+                        }
+                    }
+                })
+                .cloned()
+                .collect(),
         }
     }
 
     pub fn complement(&self) -> PartitionSet<U> {
         PartitionSet {
-            map: self.map.complement(),
+            ranges: if self.ranges.contains(&U::min_value()) {
+                self.ranges.iter().skip(1).cloned().collect()
+            } else {
+                iter::once(U::min_value()).chain(self.ranges.iter().cloned()).collect()
+            }
         }
     }
 
@@ -74,8 +143,20 @@ impl<U: Alphabet> PartitionSet<U> {
     }
 
     pub fn lower_bound_iter<'a>(&'a self) -> impl Iterator<Item=(U, ElementStatus)> + 'a {
-        self.map.ranges()
-            .map(|(u,v)| (u.clone(), if *v { ElementStatus::Included } else { ElementStatus::Excluded}))
+        use self::ElementStatus::*;
+
+        let pre = if self.ranges.len() == 0 || !self.ranges.contains(&U::min_value()) {
+            Some((U::min_value(), Excluded))
+        } else {
+            None
+        };
+
+        pre.into_iter().chain(
+            self.ranges.iter().enumerate().map(|(i, val)| {
+                (val.clone(), if i % 2 == 0 { Included } else { Excluded})
+            })
+        )
+
     }
 }
 
@@ -85,7 +166,17 @@ impl<U: Alphabet> FromIterator<Range<U>> for PartitionSet<U> {
         T: IntoIterator<Item = Range<U>>,
     {
         PartitionSet {
-            map: iter.into_iter().collect(),
+            ranges: iter.into_iter()
+                .sorted_by_key(|range| range.start())
+                .into_iter()
+                .coalesce(|prev, curr| prev.coalesce(&curr))
+                .flat_map(|item| {
+                    let mut array = ArrayVec::<[_;2]>::new();
+                    array.push(item.start());
+                    item.end().increment().map(|end| array.push(end));
+                    array
+                })
+                .collect(),
         }
     }
 }
@@ -96,18 +187,19 @@ impl<'a, U: Alphabet> IntoIterator for &'a PartitionSet<U> {
 
     fn into_iter(self) -> Self::IntoIter {
         PartitionSetRangeIter {
-            inner: self.map.range_iter(),
+            inner: self.ranges.iter(),
         }
     }
 }
 
+#[derive(PartialEq, Debug)]
 pub enum ElementStatus {
     Included,
     Excluded,
 }
 
 pub struct PartitionSetRangeIter<'a, U: 'a + Alphabet> {
-    inner: PartitionMapRangeIter<'a, U>,
+    inner: slice::Iter<'a, U>,
 }
 
 impl<'a, U: Alphabet> Iterator for PartitionSetRangeIter<'a, U> {
@@ -115,6 +207,62 @@ impl<'a, U: Alphabet> Iterator for PartitionSetRangeIter<'a, U> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next()
+            .map(|start| {
+                let end = self.inner.next().map_or(U::max_value(), |end| {
+                    end.decrement()
+                        .expect("U::min_value() found in locaiton other than the first one")
+                });
+                Range::new(start.clone(), end)
+            })
+    }
+}
+
+fn is_left<T>(item: &EitherOrBoth<T, T>) -> bool {
+    if let EitherOrBoth::Left(_) = item {
+        true
+    } else {
+        false
+    }
+}
+
+fn is_right<T>(item: &EitherOrBoth<T,T>) -> bool {
+    if let EitherOrBoth::Right(_) = item {
+        true
+    } else {
+        false
+    }
+}
+
+fn union_in_or_out<T>(item: EitherOrBoth<(usize, T), (usize, T)>) -> ElementStatus {
+    use self::EitherOrBoth::{Left, Right, Both};
+    use self::ElementStatus::{Included, Excluded};
+
+    match item {
+        Left((i, _)) | Right((i, _)) => if i%2 == 0 {Included} else {Excluded},
+        Both((i, _), (j, _)) => if i%2 == 0 || j%2 == 0 {Included} else {Excluded},
+    }
+}
+
+fn skip_while<I,F,M>(it: &mut I, f: F, in_or_out: M) -> ElementStatus
+where
+    I: itertools::PeekingNext + Sized,
+    F: FnMut(&I::Item) -> bool,
+    M: FnOnce(I::Item) -> ElementStatus
+{
+    it.peeking_take_while(f).last().map_or(ElementStatus::Excluded, in_or_out)
+}
+
+fn is_left_excluded<T>(item: Option<&EitherOrBoth<(usize, T), (usize, T)>>) -> bool {
+    match item {
+        Some(EitherOrBoth::Left((i, _))) if i%2 != 0 => true,
+        _ => false,
+    }
+}
+
+fn is_right_excluded<T>(item: Option<&EitherOrBoth<(usize, T), (usize, T)>>) -> bool {
+    match item {
+        Some(EitherOrBoth::Right((i, _))) if i%2 != 0 => true,
+        _ => false,
     }
 }
 
