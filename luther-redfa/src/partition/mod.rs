@@ -6,17 +6,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms
 
-mod last_values;
-
 use std::collections::{btree_map, BTreeMap, Bound};
 use std::fmt::Debug;
-use std::iter::{FromIterator, Peekable};
 
 use alphabet::Alphabet;
-use arrayvec::ArrayVec;
-use itertools::{self, Itertools};
+use itertools;
 use range::RangeArgument;
-use regex::Range;
 
 pub use self::set::PartitionSet;
 pub use self::set::PartitionSetRangeIter;
@@ -242,116 +237,6 @@ pub trait MergeValue<V> {
     fn next_both(&mut self, left: V, right: V) -> V;
 }
 
-impl<U> PartitionMap<U, bool>
-where
-    U: Alphabet,
-{
-    /// Produce the union of the current `PartitionMap` and another one.
-    ///
-    /// An element in the resulting `PartitionMap` is true if it was true
-    /// in either the orginal `PartitionMap` or in `other`. That is the result
-    /// of `union` is `{self[u] or other [u] | ∀ u ∈ U}` where `or` is logical
-    /// or.
-    pub fn union(&self, other: &Self) -> Self {
-        PartitionMap {
-            map: UnionIntervalIter::new(self.map.range(..), other.map.range(..)).collect(),
-        }
-    }
-
-    pub fn complement(&self) -> Self {
-        PartitionMap {
-            map: self.map
-                .iter()
-                .map(|(k, v)| (k.clone(), (!v).clone()))
-                .collect(),
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.map.len() == 1 && !self.map[&U::min_value()]
-    }
-
-    pub fn is_complement_empty(&self) -> bool {
-        self.map.len() == 1 && self.map[&U::min_value()]
-    }
-
-    fn range_iter<'a>(&'a self) -> PartitionMapRangeIter<'a, U> {
-        PartitionMapRangeIter {
-            inner: (&self.map).into_iter(),
-            first: true,
-        }
-    }
-}
-
-impl<U: Alphabet> FromIterator<Range<U>> for PartitionMap<U, bool> {
-    fn from_iter<T>(iter: T) -> Self
-    where
-        T: IntoIterator<Item = Range<U>>,
-    {
-        use itertools::Position::*;
-
-        let mut map: BTreeMap<U, bool> = iter.into_iter()
-            .sorted_by_key(|range| range.start())
-            .into_iter()
-            .coalesce(|prev, curr| prev.coalesce(&curr))
-            .with_position()
-            .flat_map(|item| {
-                let mut array = ArrayVec::<[_; 3]>::new();
-
-                let (start, end) = match item {
-                    First(item) | Only(item) => {
-                        if item.start() != U::min_value() {
-                            array.push((U::min_value(), false));
-                        }
-                        (item.start(), item.end())
-                    }
-                    Middle(item) | Last(item) => (item.start(), item.end()),
-                };
-                array.push((start, true));
-                end.increment().map(|end| array.push((end, false)));
-
-                array
-            })
-            .collect();
-
-        if map.is_empty() {
-            map.insert(U::min_value(), false);
-        }
-
-        PartitionMap { map }
-    }
-}
-
-pub struct PartitionMapRangeIter<'a, U: 'a + Alphabet> {
-    inner: btree_map::Iter<'a, U, bool>,
-    first: bool,
-}
-
-impl<'a, U: Alphabet> Iterator for PartitionMapRangeIter<'a, U> {
-    type Item = Range<U>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner
-            .next()
-            .and_then(|(k, v)| {
-                let start = if self.first && !v {
-                    self.inner.next()
-                } else {
-                    Some((k, v))
-                };
-                self.first = false;
-                start
-            })
-            .map(|(start, _)| {
-                let end = self.inner.next().map_or(U::max_value(), |(end, _)| {
-                    end.decrement()
-                        .expect("U::min_value() found in location other than the first one")
-                });
-                Range::new(start.clone(), end)
-            })
-    }
-}
-
 fn get_values<V, F>(v: V, f: F) -> (V, V)
 where
     V: PartialEq + Debug,
@@ -439,106 +324,6 @@ fn check_min_value<U: Alphabet, V: Clone>(u: &U, v_min: &V, v_not_min: &V) -> (O
         (None, v_min.clone())
     } else {
         (Some(u.clone()), v_not_min.clone())
-    }
-}
-
-struct UnionIntervalIter<'a, U: 'a, L, R>
-where
-    L: Iterator<Item = (&'a U, &'a bool)>,
-    R: Iterator<Item = (&'a U, &'a bool)>,
-{
-    left: Peekable<L>,
-    right: Peekable<R>,
-    last_vals: last_values::UnionLastVals,
-}
-
-impl<'a, U: 'a, L, R> UnionIntervalIter<'a, U, L, R>
-where
-    L: Iterator<Item = (&'a U, &'a bool)>,
-    R: Iterator<Item = (&'a U, &'a bool)>,
-{
-    fn new(left: L, right: R) -> Self {
-        UnionIntervalIter {
-            left: left.peekable(),
-            right: right.peekable(),
-            last_vals: last_values::UnionLastVals::new(),
-        }
-    }
-}
-
-impl<'a, U: 'a, L, R> Iterator for UnionIntervalIter<'a, U, L, R>
-where
-    L: Iterator<Item = (&'a U, &'a bool)>,
-    R: Iterator<Item = (&'a U, &'a bool)>,
-    U: Ord + Clone,
-{
-    type Item = (U, bool);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        enum Adv {
-            Left,
-            Right,
-            Both,
-            None,
-        };
-        
-        let mut value = None;
-        let mut key = None;
-
-        while value.is_none() {
-            let (k, v, adv) = match (self.left.peek(), self.right.peek()) {
-                (Some(&(ul, vl)), Some(&(ur, _))) if ul < ur => {
-                    let next_val = self.last_vals.next_value(Some(*vl), None);
-                    (Some(ul.clone()), next_val, Adv::Left)
-                }
-                (Some(&(ul, _)), Some(&(ur, vr))) if ul > ur => {
-                    let next_val = self.last_vals.next_value(None, Some(*vr));
-                    (Some(ur.clone()), next_val, Adv::Right)
-                }
-                (Some(&(ul, vl)), Some(&(_ur, vr))) => {
-                    // ul == ur
-                    let next_val = self.last_vals.next_value(Some(*vl), Some(*vr));
-                    (Some(ul.clone()), next_val, Adv::Both)
-                }
-                (Some(&(ul, vl)), None) => {
-                    let next_val = self.last_vals.next_value(Some(*vl), None);
-                    (Some(ul.clone()), next_val, Adv::Left)
-                }
-                (None, Some(&(ur, vr))) => {
-                    let next_val = self.last_vals.next_value(None, Some(*vr));
-                    (Some(ur.clone()), next_val, Adv::Right)
-                }
-                (None, None) => {
-                    self.last_vals.next_value(None, None);
-                    (None, None, Adv::None)
-                }
-            };
-
-            key = k;
-            value = v;
-
-            match adv {
-                Adv::Left => {
-                    self.left.next();
-                }
-                Adv::Right => {
-                    self.right.next();
-                }
-                Adv::Both => {
-                    self.left.next();
-                    self.right.next();
-                }
-                Adv::None => {
-                    break;
-                }
-            }
-        }
-
-        match (key, value) {
-            (Some(k), Some(v)) => Some((k, v)),
-            (None, None) => None,
-            _ => panic!("Unexpect return value for UnionIntervalIter::next()"),
-        }
     }
 }
 
@@ -814,19 +599,6 @@ mod test {
     }
 
     #[test]
-    fn split_partition_map_maintains_non_consecutive_values_at_min_value() {
-        use testutils::TestAlpha::*;
-
-        let pm = TestPM::new(..C, true, false);
-        let mut pm = pm.union(&TestPM::new(D.., true, false));
-        pm.split(A, |_| (true, false));
-
-        assert_eq!(pm.map.len(), 2);
-        assert!(pm.map[&A] == false);
-        assert!(pm.map[&D] == true);
-    }
-
-    #[test]
     fn split_partition_map_maintains_non_consecutive_values_at_initial_divide() {
         use testutils::TestAlpha::*;
 
@@ -835,118 +607,6 @@ mod test {
 
         assert_eq!(pm.map.len(), 1);
         assert!(pm.map[&A] == false);
-    }
-
-    #[test]
-    fn split_partition_map_maintains_non_consecutive_values_after_union() {
-        use testutils::TestAlpha::*;
-
-        let pm = TestPM::new(..C, true, false);
-        let mut pm = pm.union(&TestPM::new(D.., true, false));
-        pm.split(C, |_| (true, false));
-
-        assert_eq!(pm.map.len(), 3);
-        assert!(pm.map[&A] == true);
-        assert!(pm.map[&C] == false);
-        assert!(pm.map[&D] == true);
-    }
-
-    #[test]
-    fn union_partition_map_gets_expected_values() {
-        use testutils::TestAlpha::*;
-        let other = TestPM::new(B..D, true, false);
-
-        let sut = TestPM::new(C..E, true, false);
-        let result = sut.union(&other);
-
-        assert!(!*result.get(&A));
-        assert!(*result.get(&B));
-        assert!(*result.get(&C));
-        assert!(*result.get(&D));
-        assert!(!*result.get(&E));
-    }
-
-    #[test]
-    fn union_interval_iter_has_sticky_true() {
-        use testutils::TestAlpha::*;
-        let left = vec![(&A, &true), (&B, &false)].into_iter();
-        let right = vec![(&A, &true), (&C, &false)].into_iter();
-
-        let mut sut = UnionIntervalIter::new(left, right.into_iter());
-        sut.next();
-        let result = sut.next();
-
-        assert_matches!(result, Some((C, false)));
-    }
-
-    #[test]
-    fn union_interval_iter_pairwise_has_sticky_true() {
-        use testutils::TestAlpha::*;
-        let left = vec![(&A, &true), (&B, &false), (&C, &false)].into_iter();
-        let right = vec![(&A, &true), (&B, &true), (&C, &false)].into_iter();
-
-        let mut sut = UnionIntervalIter::new(left, right.into_iter());
-        sut.next();
-        let result = sut.next();
-
-        assert_matches!(result, Some((C, false)));
-    }
-
-    #[test]
-    fn complement_partition_map_gets_expected_values() {
-        use testutils::TestAlpha::*;
-
-        let sut = TestPM::new(B..D, true, false);
-        let result = sut.complement();
-
-        assert!(*result.get(&A));
-        assert!(!*result.get(&B));
-        assert!(!*result.get(&C));
-        assert!(*result.get(&D));
-        assert!(*result.get(&E));
-    }
-
-    #[test]
-    fn partion_map_from_ranges_has_expected_values() {
-        let ranges = vec![
-            Range::new(15u8, 25),
-            Range::new(30, 35),
-            Range::new(36, 40),
-            Range::new(50, 60),
-            Range::new(55, 65),
-            Range::new(5, 8),
-        ];
-
-        let sut: PartitionMap<_, _> = ranges.into_iter().collect();
-
-        assert!(!sut.map[&0]);
-        assert!(sut.map[&5]);
-        assert!(!sut.map[&9]);
-        assert!(sut.map[&15]);
-        assert!(!sut.map[&26]);
-        assert!(sut.map[&30]);
-        assert!(!sut.map[&41]);
-        assert!(sut.map[&50]);
-        assert!(!sut.map[&66]);
-    }
-
-    #[test]
-    fn partition_map_from_empty_ranges_have_expected_value() {
-        let ranges = Vec::<Range<u8>>::new();
-
-        let sut: PartitionMap<_, _> = ranges.into_iter().collect();
-
-        assert!(!sut.map[&0]);
-    }
-
-    #[test]
-    fn partition_map_iterates_expected_ranges() {
-        let ranges = vec![Range::new(5u8, 8), Range::new(15, 25), Range::new(50, 60)];
-
-        let sut = PartitionMap::from_iter(ranges.clone());
-        let result: Vec<_> = sut.range_iter().collect();
-
-        assert_eq!(result, ranges);
     }
 
     // Types and Strategy defintions for property tests
@@ -975,8 +635,6 @@ mod test {
     #[derive(Clone, Debug)]
     enum PMOp {
         Split(u8),
-        Union((Bound<u8>, Bound<u8>)),
-        Complement,
     }
 
     impl PMOp {
@@ -989,8 +647,6 @@ mod test {
                     arg.split(*point, |_| (true, false));
                     arg
                 }
-                Union(range) => arg.union(&PartitionMap::new(*range, true, false)),
-                Complement => arg.complement(),
             }
         }
     }
@@ -998,8 +654,6 @@ mod test {
     fn arb_pm_op_vector() -> collection::VecStrategy<BoxedStrategy<PMOp>> {
         let pmop_strategy = prop_oneof![
             2 => any::<u8>().prop_map(PMOp::Split),
-            1 => arb_u8_range().prop_map(PMOp::Union),
-            1 => Just(PMOp::Complement),
         ];
 
         collection::vec(pmop_strategy.boxed(), ..10)
