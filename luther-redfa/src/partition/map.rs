@@ -10,10 +10,9 @@ use std::collections::{btree_map, BTreeMap, Bound};
 use std::fmt::Debug;
 
 use alphabet::Alphabet;
-use itertools;
 use range::RangeArgument;
 
-use super::MergeValue;
+use super::{merge_iter, MergeValue};
 
 /// A `PartitionMap` is an effecient map from all elements of `U` to a value
 /// from `V`.
@@ -87,6 +86,16 @@ where
         PartitionMap { map }
     }
 
+    pub fn ranges(&self) -> impl Iterator<Item = (&U, &V)> {
+        self.map.range(..)
+    }
+}
+
+impl<U, V> PartitionMap<U, V>
+where
+    U: Alphabet,
+    V: Clone,
+{
     /// Creates a new `PartitionMap` from the ranges identifed by the consectutive lower bound,
     /// value pairs.
     pub fn from_lower_bound_iter<I>(iter: I) -> PartitionMap<U,V> 
@@ -97,34 +106,15 @@ where
         }
     }
 
-    pub fn ranges(&self) -> impl Iterator<Item = (&U, &V)> {
-        self.map.range(..)
-    }
-}
-
-impl<'a, 'b, U, V> PartitionMap<U, V>
-where
-    U: Alphabet + 'a + 'b,
-    V: Clone + 'a + 'b,
-{
     pub fn from_merge<I, J, M>(left: I, right: J, merge: &mut M) -> PartitionMap<U, V>
     where
         I: IntoIterator<Item = (U, V)>,
         J: IntoIterator<Item = (U, V)>,
         M: MergeValue<V>,
     {
-        use itertools::EitherOrBoth::*;
-
-        PartitionMap {
-            map: itertools::merge_join_by(left, right, |(l, _), (r, _)| l.cmp(r))
-                .map(|value| match value {
-                    Left((u, v)) => (u, merge.next_left(v)),
-                    Right((u, v)) => (u, merge.next_right(v)),
-                    Both((u, vl), (_, vr)) => (u, merge.next_both(vl, vr)),
-                })
-                .collect(),
-        }
+        PartitionMap::from_lower_bound_iter(merge_iter(left, right, merge))
     }
+
 }
 
 impl<U, V> IntoIterator for PartitionMap<U, V>

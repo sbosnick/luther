@@ -6,6 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms
 
+use itertools;
+
 pub use self::map::PartitionMap;
 pub use self::set::PartitionSet;
 pub use self::set::PartitionSetRangeIter;
@@ -17,6 +19,23 @@ pub trait MergeValue<V> {
     fn next_left(&mut self, v: V) -> V;
     fn next_right(&mut self, v: V) -> V;
     fn next_both(&mut self, left: V, right: V) -> V;
+}
+
+pub fn merge_iter<'a, I, J, M, U, V>(left: I, right: J, merge: &'a mut M) -> impl Iterator<Item=(U,V)> + 'a
+where
+    I: IntoIterator<Item=(U,V)> + 'a,
+    J: IntoIterator<Item=(U,V)> + 'a,
+    M: MergeValue<V>,
+    U: Ord,
+{
+    use itertools::EitherOrBoth::*;
+
+    itertools::merge_join_by(left, right, |(l, _), (r, _)| l.cmp(r))
+        .map(move |value| match value {
+            Left((u, v)) => (u, merge.next_left(v)),
+            Right((u, v)) => (u, merge.next_right(v)),
+            Both((u, vl), (_, vr)) => (u, merge.next_both(vl, vr)),
+        })
 }
 
 #[cfg(test)]
