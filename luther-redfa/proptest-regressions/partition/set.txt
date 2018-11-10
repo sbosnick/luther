@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+xs 3772725568 363784298 4092340088 81371015 # shrinks to set1 = PartitionSet { ranges: [0, 1, 5, 127] }, set2 = PartitionSet { ranges: [127, 128] }
+xs 4063003822 1777900011 1130075562 2255367777 # shrinks to ranges = [Range { start: 0, end: 0 }, Range { start: 0, end: 0 }]
+xs 3127903667 4123362683 3338186564 1664688530 # shrinks to set1 = PartitionSet { ranges: [0, 48, 56, 57] }, set2 = PartitionSet { ranges: [1, 57] }
