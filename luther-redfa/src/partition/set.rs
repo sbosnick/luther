@@ -11,7 +11,7 @@ use std::iter::{self, FromIterator};
 use std::slice;
 
 use arrayvec::ArrayVec;
-use itertools::{self, Itertools, EitherOrBoth};
+use itertools::{self, Itertools};
 
 use alphabet::Alphabet;
 use partition::PartitionMap;
@@ -59,51 +59,56 @@ impl<U: Alphabet> PartitionSet<U> {
 
     pub fn union(&self, other: &PartitionSet<U>) -> PartitionSet<U> {
         use itertools::EitherOrBoth::{Left, Right, Both};
-        use self::ElementStatus::Included;
+        use self::ElementStatus::{Included, Excluded};
+
+        let mut left = Excluded;
+        let mut right = Excluded;
 
         PartitionSet {
             ranges: itertools::merge_join_by(
                         self.ranges.iter().enumerate(),
                         other.ranges.iter().enumerate(), 
                         |(_, l), (_, r)| l.cmp(r))
-                .peekable()
-                .batching(|it| {
-                    match it.next() {
-                        None => None,
-                        Some(Left((i, v))) => {
-                            if i % 2 == 0 {
-                                let last = skip_while(it, is_right, union_in_or_out);
-                                if last == Included && is_left_excluded(it.peek()) {
-                                    it.next();
-                                }
-                            }
-                            Some(v)
-                        }
-                        Some(Right((i,v))) => {
-                            if i % 2 == 0 {
-                                let last = skip_while(it, is_left, union_in_or_out);
-                                if last == Included && is_right_excluded(it.peek()) {
-                                    it.next();
-                                }
-                            }
-                            Some(v)
-                        }
-                        Some(Both((i,v), (j,_))) => {
-                            match (i % 2 == 0, j % 2 == 0) {
-                                (true, true) => {
-                                    if let Some(EitherOrBoth::Left(_)) = it.peek() {
-                                        skip_while(it, is_left, union_in_or_out);
-                                    }
-                                    if let Some(EitherOrBoth::Right(_)) = it.peek() {
-                                        skip_while(it, is_right, union_in_or_out);
-                                    }
-                                }
-                                (true, false) => {skip_while(it, is_right, union_in_or_out);}
-                                (false, true) => {skip_while(it, is_left, union_in_or_out);}
-                                (false, false) => {}
-                            }
-                            Some(v)
-                        }
+                .filter_map(|item| match item {
+                    Left((i,v)) if is_even(i) => {
+                        left = Included;
+                        emit(right, v)
+                    }
+                    Right((i,v)) if is_even(i) => {
+                        right = Included;
+                        emit(left, v)
+                    }
+                    Left((_,v)) => {
+                        left = Excluded;
+                        emit(right, v)
+                    }
+                    Right((_,v)) => {
+                        right = Excluded;
+                        emit(left, v)
+                    }
+                    Both((i,v), (j,_)) if is_even(i) && is_even(j) => {
+                        let result = emit_both(left, right, v);
+                        left = Included;
+                        right = Included;
+                        result
+                    }
+                    Both((i,v), (j,_)) if !is_even(i) && is_even(j) => {
+                        let result = emit_both(left, right, v);
+                        left = Excluded;
+                        right = Included;
+                        result
+                    }
+                    Both((i,v), (j,_)) if is_even(i) && !is_even(j) => {
+                        let result = emit_both(left, right, v);
+                        left = Included;
+                        right = Excluded;
+                        result
+                    }
+                    Both((_,v), (_,_)) => {
+                        let result = emit_included(left, right, v);
+                        left = Excluded;
+                        right = Excluded;
+                        result
                     }
                 })
                 .cloned()
@@ -192,7 +197,7 @@ impl<'a, U: Alphabet> IntoIterator for &'a PartitionSet<U> {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum ElementStatus {
     Included,
     Excluded,
@@ -217,52 +222,31 @@ impl<'a, U: Alphabet> Iterator for PartitionSetRangeIter<'a, U> {
     }
 }
 
-fn is_left<T>(item: &EitherOrBoth<T, T>) -> bool {
-    if let EitherOrBoth::Left(_) = item {
-        true
+fn is_even(i: usize) -> bool {
+    i%2 == 0
+}
+
+fn emit<T>(status: ElementStatus, value: T) -> Option<T> {
+    if status == ElementStatus::Excluded {
+        Some(value)
     } else {
-        false
+        None
     }
 }
 
-fn is_right<T>(item: &EitherOrBoth<T,T>) -> bool {
-    if let EitherOrBoth::Right(_) = item {
-        true
+fn emit_both<T>(left : ElementStatus, right: ElementStatus, value: T) -> Option<T> {
+    if left == ElementStatus::Excluded && right == ElementStatus::Excluded {
+        Some(value)
     } else {
-        false
+        None
     }
 }
 
-fn union_in_or_out<T>(item: EitherOrBoth<(usize, T), (usize, T)>) -> ElementStatus {
-    use self::EitherOrBoth::{Left, Right, Both};
-    use self::ElementStatus::{Included, Excluded};
-
-    match item {
-        Left((i, _)) | Right((i, _)) => if i%2 == 0 {Included} else {Excluded},
-        Both((i, _), (j, _)) => if i%2 == 0 || j%2 == 0 {Included} else {Excluded},
-    }
-}
-
-fn skip_while<I,F,M>(it: &mut I, f: F, in_or_out: M) -> ElementStatus
-where
-    I: itertools::PeekingNext + Sized,
-    F: FnMut(&I::Item) -> bool,
-    M: FnOnce(I::Item) -> ElementStatus
-{
-    it.peeking_take_while(f).last().map_or(ElementStatus::Excluded, in_or_out)
-}
-
-fn is_left_excluded<T>(item: Option<&EitherOrBoth<(usize, T), (usize, T)>>) -> bool {
-    match item {
-        Some(EitherOrBoth::Left((i, _))) if i%2 != 0 => true,
-        _ => false,
-    }
-}
-
-fn is_right_excluded<T>(item: Option<&EitherOrBoth<(usize, T), (usize, T)>>) -> bool {
-    match item {
-        Some(EitherOrBoth::Right((i, _))) if i%2 != 0 => true,
-        _ => false,
+fn emit_included<T>(left: ElementStatus, right: ElementStatus, value: T) -> Option<T> {
+    if left == ElementStatus::Included || right == ElementStatus::Included {
+        Some(value)
+    } else {
+        None
     }
 }
 
@@ -271,6 +255,8 @@ mod test {
     use super::*;
     use std::iter;
     use testutils;
+    use proptest::prelude::*;
+    use proptest::collection;
 
     #[test]
     fn partition_set_into_map_gets_expected_values() {
@@ -343,5 +329,72 @@ mod test {
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0], Range::new(B, D));
+    }
+
+    #[test]
+    fn partition_set_union_with_adjacent_ranges_contains_expected_values() {
+        use testutils::TestAlpha::*;
+        let set1 = PartitionSet::from_iter(iter::once(Range::new(C,C)));
+        let set2 = PartitionSet::from_iter(iter::once(Range::new(D,D)));
+
+        let sut = set1.union(&set2);
+
+        assert!(!sut.contains(&A));
+        assert!(!sut.contains(&B));
+        assert!(sut.contains(&C));
+        assert!(sut.contains(&D));
+        assert!(!sut.contains(&E));
+    }
+
+    // Strategy defintions for property tests
+
+    prop_compose!{
+        fn arb_range()(lower in any::<u8>())
+            (lower in Just(lower), upper in lower..)
+            -> Range<u8> 
+            {
+                Range::new(lower, upper)
+            }
+    }
+
+    prop_compose!{
+        fn arb_partiton_set()
+            (ranges in collection::vec(arb_range(), collection::size_range(..10)))
+            -> PartitionSet<u8>
+            {
+                PartitionSet::from_iter(ranges)
+            }
+    }
+
+    // Property tests
+
+    proptest! {
+        #[test]
+        fn prop_partition_set_union_contains_values_from_sources(
+            set1 in arb_partiton_set(),
+            set2 in arb_partiton_set(),
+            )
+        {
+            let union = set1.union(&set2);
+
+            for i in (0..256).map(|x| x as u8) {
+                prop_assert_eq!(
+                    union.contains(&i),
+                    set1.contains(&i) || set2.contains(&i),
+                    "union is {:?}; i is {}",
+                    union, i);
+            }
+        }
+
+        #[test]
+        fn prop_partition_set_from_ranges_has_ascenting_inner_ranges(
+            ranges in collection::vec(arb_range(), collection::size_range(..10)))
+        {
+            let sut = PartitionSet::from_iter(ranges);
+
+            for (first, second) in sut.ranges.iter().tuple_windows() {
+                prop_assert!( first < second, "set is {:?}", sut);
+            }
+        }
     }
 }

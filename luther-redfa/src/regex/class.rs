@@ -148,22 +148,16 @@ impl<A: Alphabet> Range<A> {
     }
 
     pub(crate) fn coalesce(&self, other: &Self) -> Result<Self, (Self, Self)> {
-        let (anchor, comp) = if self.start <= other.start {
-            (self, other)
-        } else {
-            (other, self)
-        };
+        let maxstart = self.start.clone().max(other.start.clone());
+        let minend = self.end.clone().min(other.end.clone());
 
-        comp.start
-            .decrement()
-            .and_then(|start| {
-                if start <= anchor.end {
-                    Some(Range::new(anchor.start.clone(), comp.end.clone()))
-                } else {
-                    None
-                }
-            })
-            .ok_or_else(|| (self.clone(), other.clone()))
+        if maxstart.decrement().map_or(true, |start| start <= minend) {
+            let start = self.start.clone().min(other.start.clone());
+            let end = self.end.clone().max(other.end.clone());
+            Ok(Range::new(start, end))
+        } else {
+            Err((self.clone(), other.clone()))
+        }
     }
 }
 
@@ -173,3 +167,75 @@ impl<'a, A: Alphabet> PartialEq<Range<A>> for &'a Range<A> {
     }
 }
 
+#[cfg(test)]
+mod test {
+    use super::*;
+    use testutils::TestAlpha::*;
+
+    #[test]
+    fn range_coalesce_min_value_ranges() {
+        let other = Range::new(A, A);
+
+        let sut = Range::new(A, A);
+        let result = sut.coalesce(&other);
+
+        assert_matches!(result, Ok(r) => {
+            assert_eq!(r.start(), A);
+            assert_eq!(r.end(), A);
+        });
+    }
+
+    #[test]
+    fn range_coalesce_ajacent_ranges() {
+        let other = Range::new(A, B);
+
+        let sut = Range::new(C, D);
+        let result = sut.coalesce(&other);
+
+        assert_matches!(result, Ok(r) => {
+            assert_eq!(r.start(), A);
+            assert_eq!(r.end(), D);
+        });
+    }
+
+    #[test]
+    fn range_coalesce_overlapping_ranges() {
+        let other = Range::new(A, C);
+
+        let sut = Range::new(B, D);
+        let result = sut.coalesce(&other);
+
+        assert_matches!(result, Ok(r) => {
+            assert_eq!(r.start(), A);
+            assert_eq!(r.end(), D);
+        });
+    }
+
+    #[test]
+    fn range_coalesce_non_overlapping_ranges() {
+        let other = Range::new(A, B);
+
+        let sut = Range::new(D, D);
+        let result = sut.coalesce(&other);
+
+        assert_matches!(result, Err((r, s)) => {
+            assert_eq!(r.start(), D);
+            assert_eq!(r.end(), D);
+            assert_eq!(s.start(), A);
+            assert_eq!(s.end(), B);
+        });
+    }
+
+    #[test]
+    fn range_coalesce_contained_ranges() {
+        let other = Range::new(C, C);
+
+        let sut = Range::new(A, D);
+        let result = sut.coalesce(&other);
+
+        assert_matches!(result, Ok(r) => {
+            assert_eq!(r.start(), A);
+            assert_eq!(r.end(), D);
+        });
+    }
+}
