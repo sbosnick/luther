@@ -18,12 +18,6 @@ use super::MergeValue;
 /// A `PartitionMap` is an effecient map from all elements of `U` to a value
 /// from `V`.
 ///
-/// The mapping is achived by mapping an interval of of elements of the universe
-/// to the same value. This provides an implementation of a simplified version
-/// of the union-split-find problem. More specifically this (attepts to) implement
-/// the "Interval Union-Split-Find Problem" described in [_Complexity of
-/// Union-Split-Find Problems_][Lai].
-///
 /// # Type Parameters
 /// | U | The universe to map to values                       |
 /// | V | The values to which to map elements of the universe |
@@ -32,8 +26,6 @@ use super::MergeValue;
 /// one. It is likely that most useful types for U are `Copy`, but there may be a useful
 /// type for V that is not `Copy` but has an inexpensive `Clone` implementation (i.e.
 /// `Arc`). U must also be and `Alphabet`.
-///
-/// [Lai]: http://hdl.handle.net/1721.1/45638
 #[derive(Clone, Debug, PartialEq, PartialOrd, Hash, Eq)]
 pub struct PartitionMap<U, V> {
     map: BTreeMap<U, V>,
@@ -105,86 +97,6 @@ where
         }
     }
 
-    /// Gets the value associated with an element of U.
-    pub fn get(&self, u: &U) -> &V {
-        self.map
-            .range((Bound::Unbounded, Bound::Included(u)))
-            .next_back()
-            .expect("Invalid PartionMap: unable to get element.")
-            .1
-    }
-
-    /// Splits the partition at `u` using `f` to map the resulting values.
-    ///
-    /// The interval that `u` is in is split at `u`. That is, assuming that
-    /// `u` falls in the interval [a, b) then the patition is split to include
-    /// intervals [a,u) and [u, b). The value mapping function `f` maps the
-    /// current value of the elements of the interval to a pair of values,
-    /// one for each side of the split.
-    ///
-    /// # Panics
-    /// `split` will panic if `f` produces two identical values.
-    pub fn split<F>(&mut self, u: U, f: F)
-    where
-        F: Fn(V) -> (V, V),
-    {
-        let (delete_left, insert_right, check_right) = {
-            let ((key, value), prior) = get_current_and_prior_intervals(u.clone(), &mut self.map);
-            let (l, r) = get_values(value.clone(), f);
-
-            // adjust the value of the current interval, if it is the
-            // first interval or if the prior interval value matches
-            // the new left value
-            prior
-                .clone()
-                .filter(|(_, ref v)| *v == l.clone())
-                .or_else(|| {
-                    *value = if key == u {
-                        r.clone()
-                    } else {
-                        l.clone()
-                    };
-                    None
-                });
-
-            // select the insertions and deletions to the left and right
-            match prior {
-                // split point was already present in the map and is not the first entry
-                Some((_, ref v)) if key == u && *v != r => (None, None, Some(r)),
-                Some((_, ref v)) if key == u && *v == r => (Some(key), None, Some(r)),
-
-                // split point not present in map and its interval is not the first entry
-                Some((_, ref v)) if *v == l => (Some(key), Some(r), None),
-                Some(_) => (None, Some(r), None),
-
-                // split point already present in the map as the first entry
-                None if key == u => (None, None, Some(r)),
-
-                // interval of split point is the first entry
-                None => (None, Some(r), None),
-            }
-        };
-
-        // insert and delete to the right
-        insert_right
-            .map(|value| self.insert_value(u.clone(), value))
-            .or(check_right)
-            .and_then(|value| get_next_interval_key_if_value(u, value, &self.map))
-            .map(|key| self.delete_key(key));
-
-        // delete to the left
-        delete_left.map(|key| self.delete_key(key));
-    }
-
-    fn insert_value(&mut self, u: U, v: V) -> V {
-        self.map.insert(u, v.clone());
-        v
-    }
-
-    fn delete_key(&mut self, u: U) {
-        self.map.remove(&u);
-    }
-
     pub fn ranges(&self) -> impl Iterator<Item = (&U, &V)> {
         self.map.range(..)
     }
@@ -226,43 +138,6 @@ where
     fn into_iter(self) -> Self::IntoIter {
         self.map.into_iter()
     }
-}
-
-fn get_values<V, F>(v: V, f: F) -> (V, V)
-where
-    V: PartialEq + Debug,
-    F: Fn(V) -> (V, V),
-{
-    let (l, r) = f(v);
-    assert_ne!(
-        l, r,
-        "Function passed to PartitionMap::split() produced idential values."
-    );
-    (l, r)
-}
-
-fn get_current_and_prior_intervals<U: Ord + Clone, V: Clone>(
-    u: U,
-    map: &mut BTreeMap<U, V>,
-) -> ((U, &mut V), Option<(U, V)>) {
-    let mut range = map.range_mut((Bound::Unbounded, Bound::Included(&u)));
-    let (key, value) = range
-        .next_back()
-        .expect("Invalid PartionMap: unable to get element.");
-    (
-        (key.clone(), value),
-        range.next_back().map(|(k, v)| (k.clone(), v.clone())),
-    )
-}
-
-fn get_next_interval_key_if_value<U: Ord + Clone, V: PartialEq>(
-    u: U,
-    value: V,
-    map: &BTreeMap<U, V>,
-) -> Option<U> {
-    map.range((Bound::Excluded(&u), Bound::Unbounded))
-        .next()
-        .and_then(|(k, v)| if *v == value { Some(k.clone()) } else { None })
 }
 
 fn map_range<U, V>(
@@ -319,11 +194,18 @@ fn check_min_value<U: Alphabet, V: Clone>(u: &U, v_min: &V, v_not_min: &V) -> (O
 }
 
 #[cfg(test)]
+pub fn map_get<'a, U: Ord, V>(map: &'a PartitionMap<U,V>, u: &U) -> &'a V 
+{
+    map.map
+        .range((Bound::Unbounded, Bound::Included(u)))
+        .next_back()
+        .expect("Invalid PartionMap: unable to get element.")
+        .1
+}
+
+#[cfg(test)]
 mod test {
     use super::*;
-    use itertools::Itertools;
-    use proptest::collection;
-    use proptest::prelude::*;
     use testutils::*;
 
     // Simple types for use in unit tests
@@ -470,123 +352,5 @@ mod test {
         assert!(!pm.map[&A]);
         assert!(pm.map[&C]);
         assert!(!pm.map[&D]);
-    }
-
-    #[test]
-    fn split_partition_map_maintains_non_consectutive_values_to_left() {
-        use testutils::TestAlpha::*;
-
-        let mut pm = TestPM::new(B.., 1, 0);
-        pm.split(C, |_| (0, 1));
-
-        assert_eq!(pm.map.len(), 2);
-        assert!(pm.map[&A] == 0);
-        assert!(pm.map[&C] == 1);
-    }
-
-    #[test]
-    fn split_partition_map_maintains_non_consectutive_values_to_right() {
-        use testutils::TestAlpha::*;
-
-        let mut pm = TestPM::new(..D, 0, 1);
-        pm.split(C, |_| (0, 1));
-
-        assert_eq!(pm.map.len(), 2);
-        assert!(pm.map[&A] == 0);
-        assert!(pm.map[&C] == 1);
-    }
-
-    #[test]
-    fn split_partition_map_maintains_non_consecutive_values_at_initial_divide() {
-        use testutils::TestAlpha::*;
-
-        let mut pm = TestPM::new(C.., true, false);
-        pm.split(C, |_| (true, false));
-
-        assert_eq!(pm.map.len(), 1);
-        assert!(pm.map[&A] == false);
-    }
-
-    // Types and Strategy defintions for property tests
-
-    prop_compose!{
-        fn arb_u8_range()(lower in any::<u8>())
-            (lower in Just(lower), upper in lower.., kind in 0u8..4)
-            -> (Bound<u8>, Bound<u8>) {
-                use std::collections::Bound::*;
-                match kind {
-                    0 => (Unbounded, Unbounded),
-                    1 => (Included(lower), Unbounded),
-                    2 => (Unbounded, Excluded(upper)),
-                    _ => (Included(lower), Excluded(upper)),
-                }
-            }
-    }
-
-    prop_compose!{
-        fn arb_partition_map()(range in arb_u8_range())
-            -> PartitionMap<u8, bool> {
-                PartitionMap::new(range, true, false)
-        }
-    }
-
-    #[derive(Clone, Debug)]
-    enum PMOp {
-        Split(u8),
-    }
-
-    impl PMOp {
-        fn run(&self, arg: &PartitionMap<u8, bool>) -> PartitionMap<u8, bool> {
-            use self::PMOp::*;
-
-            match self {
-                Split(point) => {
-                    let mut arg = arg.clone();
-                    arg.split(*point, |_| (true, false));
-                    arg
-                }
-            }
-        }
-    }
-
-    fn arb_pm_op_vector() -> collection::VecStrategy<BoxedStrategy<PMOp>> {
-        let pmop_strategy = prop_oneof![
-            2 => any::<u8>().prop_map(PMOp::Split),
-        ];
-
-        collection::vec(pmop_strategy.boxed(), ..10)
-    }
-
-    // Property tests and supporting functions
-
-    proptest! {
-        #[test]
-        fn prop_partition_map_contains_min_value(
-            pm in arb_partition_map(),
-            ops in arb_pm_op_vector()
-            )
-        {
-            let mut pm: PartitionMap<u8,bool> = pm.clone();
-            for op in ops {
-                pm = op.run(&pm);
-            }
-
-            prop_assert!(pm.map.contains_key(&0));
-        }
-
-        #[test]
-        fn prop_partition_map_values_alternate(
-            pm in arb_partition_map(),
-            ops in arb_pm_op_vector())
-        {
-            let mut pm: PartitionMap<u8,bool> = pm.clone();
-            for op in ops {
-                pm = op.run(&pm);
-            }
-
-            for (first, second) in pm.map.values().tuple_windows() {
-                prop_assert_ne!(first, second);
-            }
-        }
     }
 }

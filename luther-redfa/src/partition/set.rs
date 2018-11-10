@@ -257,6 +257,7 @@ mod test {
     use testutils;
     use proptest::prelude::*;
     use proptest::collection;
+    use partition::map_get;
 
     #[test]
     fn partition_set_into_map_gets_expected_values() {
@@ -265,11 +266,11 @@ mod test {
         let sut = PartitionSet::from_iter(vec![Range::new(B, C)]);
         let map = sut.into_map(0, 1);
 
-        assert_eq!(*map.get(&A), 1);
-        assert_eq!(*map.get(&B), 0);
-        assert_eq!(*map.get(&C), 0);
-        assert_eq!(*map.get(&D), 1);
-        assert_eq!(*map.get(&E), 1);
+        assert_eq!(*map_get(&map, &A), 1);
+        assert_eq!(*map_get(&map, &B), 0);
+        assert_eq!(*map_get(&map, &C), 0);
+        assert_eq!(*map_get(&map, &D), 1);
+        assert_eq!(*map_get(&map, &E), 1);
     }
 
     #[test]

@@ -20,6 +20,9 @@ pub trait MergeValue<V> {
 }
 
 #[cfg(test)]
+use self::map::map_get;
+
+#[cfg(test)]
 mod test {
     use super::*;
     use testutils::*;
@@ -54,11 +57,11 @@ mod test {
 
         let pm = TestPM::new(B..D, true, false);
 
-        assert!(!pm.get(&A));
-        assert!(pm.get(&B));
-        assert!(pm.get(&C));
-        assert!(!pm.get(&D));
-        assert!(!pm.get(&E));
+        assert!(!map_get(&pm, &A));
+        assert!(map_get(&pm, &B));
+        assert!(map_get(&pm, &C));
+        assert!(!map_get(&pm, &D));
+        assert!(!map_get(&pm, &E));
     }
 
     #[test]
@@ -67,11 +70,11 @@ mod test {
 
         let pm = TestPM::new(A.., true, false);
 
-        assert!(pm.get(&A));
-        assert!(pm.get(&B));
-        assert!(pm.get(&C));
-        assert!(pm.get(&D));
-        assert!(pm.get(&E));
+        assert!(map_get(&pm, &A));
+        assert!(map_get(&pm, &B));
+        assert!(map_get(&pm, &C));
+        assert!(map_get(&pm, &D));
+        assert!(map_get(&pm, &E));
     }
 
     struct Value(u8);
@@ -102,25 +105,10 @@ mod test {
 
         let sut = TestPM::from_merge(left, right, &mut merge);
 
-        assert_eq!(*sut.get(&A), 1);
-        assert_eq!(*sut.get(&B), 2);
-        assert_eq!(*sut.get(&C), 3);
-        assert_eq!(*sut.get(&D), 4);
-        assert_eq!(*sut.get(&E), 4);
+        assert_eq!(*map_get(&sut, &A), 1);
+        assert_eq!(*map_get(&sut, &B), 2);
+        assert_eq!(*map_get(&sut, &C), 3);
+        assert_eq!(*map_get(&sut, &D), 4);
+        assert_eq!(*map_get(&sut, &E), 4);
     }
-
-    #[test]
-    fn split_partion_map_gets_expected_values() {
-        use testutils::TestAlpha::*;
-
-        let mut pm = TestPM::new(B..E, 1, 0);
-        pm.split(D, |v| (v, 5));
-
-        assert_eq!(*pm.get(&A), 0);
-        assert_eq!(*pm.get(&B), 1);
-        assert_eq!(*pm.get(&C), 1);
-        assert_eq!(*pm.get(&D), 5);
-        assert_eq!(*pm.get(&E), 0);
-    }
-
 }
