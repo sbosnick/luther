@@ -23,6 +23,7 @@
 
 use std::fmt::{self, Display};
 use std::ops::Index;
+use std::slice;
 
 use alphabet::Alphabet;
 use typed_arena::Arena;
@@ -362,6 +363,11 @@ impl<'a, A: Alphabet> RegexVec<'a, A> {
     {
         self.vec.iter().map(move |rek| f(Regex::new(rek)))
     }
+
+    /// Iterate through the `Regex` that make up this `RegexVec`.
+    pub fn iter(&self) -> RegexVecIter<'a, A> {
+        RegexVecIter{ inner: self.vec.iter() }
+    }
 }
 
 impl<'a, A: Alphabet> Index<usize> for RegexVec<'a, A> {
@@ -369,6 +375,21 @@ impl<'a, A: Alphabet> Index<usize> for RegexVec<'a, A> {
 
     fn index(&self, index: usize) -> &Self::Output {
         self.vec.index(index)
+    }
+}
+
+/// Iterator for the `Regex` that make up a `RegexVec`.
+///
+/// This is create by the `iter()` method of `RegexVec`.
+pub struct RegexVecIter<'a, A: 'a + Alphabet> {
+    inner: slice::Iter<'a, RegexKind<'a, A>>,
+}
+
+impl<'a, A: Alphabet> Iterator for RegexVecIter<'a, A> {
+    type Item = Regex<'a, A>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|rek| Regex::new(rek))
     }
 }
 

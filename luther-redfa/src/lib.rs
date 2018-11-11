@@ -40,6 +40,7 @@ mod label;
 mod parser;
 mod partition;
 mod range;
+mod traverse;
 
 #[cfg(test)]
 mod testutils;
