@@ -11,19 +11,19 @@ use std::iter::FromIterator;
 use std::rc::Rc;
 
 use alphabet::Alphabet;
-use partition::{PartitionMap, PartitionSet, PartitionSetRangeIter};
+use partition::{Partition, Set, SetRangeIter};
 
 /// A (possibly empty) subset of the alphabet `A`.
 #[derive(Debug, PartialEq, PartialOrd, Hash, Eq, Clone)]
 pub struct Class<A: Alphabet> {
-    set: Option<Rc<PartitionSet<A>>>,
+    set: Option<Rc<Set<A>>>,
 }
 
 /// An iterator over the closed ranges of a class.
 ///
 /// This is the return type of the `Class<A>::ranges()` method.
 pub struct Ranges<'a, A: 'a + Alphabet> {
-    inner: Option<PartitionSetRangeIter<'a, A>>,
+    inner: Option<SetRangeIter<'a, A>>,
 }
 
 /// An inclusive range of charaters from the alphabet `A`.
@@ -77,19 +77,19 @@ impl<A: Alphabet> Class<A> {
     pub(super) fn complement(&self) -> Class<A> {
         Class {
             set: self.set.as_ref().map_or_else(
-                     || Some( Rc::new( PartitionSet::full_singleton())),
+                     || Some( Rc::new( Set::full_singleton())),
                      |set| Some( Rc::new(set.complement())),
                  )
         }
     }
 
-    pub(crate) fn into_partition_map<V>(&self, in_value: V, out_value: V) -> PartitionMap<A, V>
+    pub(crate) fn into_partition_map<V>(&self, in_value: V, out_value: V) -> Partition<A, V>
     where
         V: Debug + Clone + PartialEq,
     {
         match self.set.as_ref() {
             Some(set) => set.into_map(in_value, out_value),
-            None => PartitionMap::new(.., out_value, in_value),
+            None => Partition::new(.., out_value, in_value),
         }
     }
 }

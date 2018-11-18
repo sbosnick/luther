@@ -14,10 +14,10 @@ use arrayvec::ArrayVec;
 use itertools::{self, Itertools};
 
 use alphabet::Alphabet;
-use partition::PartitionMap;
+use partition::Partition;
 use regex::Range;
 
-/// A `PartitionSet` is a set of `U`.
+/// A `Set` is a set of `U`.
 ///
 /// # Type Parameter
 /// | U | The universe to partition to determine set membership |
@@ -25,7 +25,7 @@ use regex::Range;
 /// U must be `Clone` but the `clone` implementation should be an efficient one. It is
 /// likely that most useful types for U are `Copy`. U must also be an `Alphabet`.
 #[derive(Clone, Debug, PartialEq, PartialOrd, Hash, Eq)]
-pub struct PartitionSet<U> {
+pub struct Set<U> {
     ranges: Vec<U>,
 }
 
@@ -39,9 +39,9 @@ pub struct PartitionSet<U> {
 // The even numbered indexes of 'ranges' are the included ranges and the odd numbered
 // indexes are the excluded ranges. If 'ranges.len() == 0' or if 'ranges[0] != U::min_value()'
 // then there is an implicit first range starting at U::min_value() that is excluded.
-impl<U: Alphabet> PartitionSet<U> {
-    pub fn full_singleton() -> PartitionSet<U> {
-        PartitionSet {
+impl<U: Alphabet> Set<U> {
+    pub fn full_singleton() -> Set<U> {
+        Set {
             ranges: vec![U::min_value()],
         }
     }
@@ -57,14 +57,14 @@ impl<U: Alphabet> PartitionSet<U> {
         self.ranges.len() == 1 && self.ranges.contains(&U::min_value())
     }
 
-    pub fn union(&self, other: &PartitionSet<U>) -> PartitionSet<U> {
+    pub fn union(&self, other: &Set<U>) -> Set<U> {
         use itertools::EitherOrBoth::{Left, Right, Both};
         use self::ElementStatus::{Included, Excluded};
 
         let mut left = Excluded;
         let mut right = Excluded;
 
-        PartitionSet {
+        Set {
             ranges: itertools::merge_join_by(
                         self.ranges.iter().enumerate(),
                         other.ranges.iter().enumerate(), 
@@ -116,8 +116,8 @@ impl<U: Alphabet> PartitionSet<U> {
         }
     }
 
-    pub fn complement(&self) -> PartitionSet<U> {
-        PartitionSet {
+    pub fn complement(&self) -> Set<U> {
+        Set {
             ranges: if self.ranges.contains(&U::min_value()) {
                 self.ranges.iter().skip(1).cloned().collect()
             } else {
@@ -126,13 +126,13 @@ impl<U: Alphabet> PartitionSet<U> {
         }
     }
 
-    pub fn into_map<V>(&self, in_value: V, out_value: V) -> PartitionMap<U, V>
+    pub fn into_map<V>(&self, in_value: V, out_value: V) -> Partition<U, V>
     where
         V: Debug + Clone + PartialEq,
     {
         use self::ElementStatus::*;
 
-        PartitionMap::from_lower_bound_iter(
+        Partition::from_lower_bound_iter(
                 self.lower_bound_iter()
                 .map(|(u, status)| {
                     (
@@ -165,12 +165,12 @@ impl<U: Alphabet> PartitionSet<U> {
     }
 }
 
-impl<U: Alphabet> FromIterator<Range<U>> for PartitionSet<U> {
+impl<U: Alphabet> FromIterator<Range<U>> for Set<U> {
     fn from_iter<T>(iter: T) -> Self
     where
         T: IntoIterator<Item = Range<U>>,
     {
-        PartitionSet {
+        Set {
             ranges: iter.into_iter()
                 .sorted_by_key(|range| range.start())
                 .into_iter()
@@ -186,12 +186,12 @@ impl<U: Alphabet> FromIterator<Range<U>> for PartitionSet<U> {
     }
 }
 
-impl<'a, U: Alphabet> IntoIterator for &'a PartitionSet<U> {
+impl<'a, U: Alphabet> IntoIterator for &'a Set<U> {
     type Item = Range<U>;
-    type IntoIter = PartitionSetRangeIter<'a, U>;
+    type IntoIter = SetRangeIter<'a, U>;
 
     fn into_iter(self) -> Self::IntoIter {
-        PartitionSetRangeIter {
+        SetRangeIter {
             inner: self.ranges.iter(),
         }
     }
@@ -203,11 +203,11 @@ pub enum ElementStatus {
     Excluded,
 }
 
-pub struct PartitionSetRangeIter<'a, U: 'a + Alphabet> {
+pub struct SetRangeIter<'a, U: 'a + Alphabet> {
     inner: slice::Iter<'a, U>,
 }
 
-impl<'a, U: Alphabet> Iterator for PartitionSetRangeIter<'a, U> {
+impl<'a, U: Alphabet> Iterator for SetRangeIter<'a, U> {
     type Item = Range<U>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -263,7 +263,7 @@ mod test {
     fn partition_set_into_map_gets_expected_values() {
         use testutils::TestAlpha::*;
 
-        let sut = PartitionSet::from_iter(vec![Range::new(B, C)]);
+        let sut = Set::from_iter(vec![Range::new(B, C)]);
         let map = sut.into_map(0, 1);
 
         assert_eq!(*map_get(&map, &A), 1);
@@ -278,7 +278,7 @@ mod test {
         use testutils::TestAlpha::*;
         let range = vec![Range::new(B, C)];
 
-        let sut = PartitionSet::from_iter(range);
+        let sut = Set::from_iter(range);
 
         assert!(!sut.contains(&A));
         assert!(sut.contains(&B));
@@ -291,7 +291,7 @@ mod test {
     fn partition_set_from_empty_ranges_is_empty() {
         let range = iter::empty::<Range<u8>>();
 
-        let sut: PartitionSet<_> = range.collect();
+        let sut: Set<_> = range.collect();
 
         assert_eq!(sut.into_iter().count(), 0);
     }
@@ -300,7 +300,7 @@ mod test {
     fn partition_set_full_singleton_contains_all_values() {
         use testutils::TestAlpha::*;
 
-        let sut = PartitionSet::full_singleton();
+        let sut = Set::full_singleton();
 
         assert!(sut.contains(&A));
         assert!(sut.contains(&B));
@@ -313,7 +313,7 @@ mod test {
     fn partition_set_complement_of_empty_is_complement_empty() {
         let range = iter::empty::<Range<testutils::TestAlpha>>();
 
-        let sut: PartitionSet<_> = range.collect();
+        let sut: Set<_> = range.collect();
         let complement = sut.complement();
 
         assert!(complement.is_complement_empty());
@@ -322,8 +322,8 @@ mod test {
     #[test]
     fn partition_set_union_iterates_expected_values() {
         use testutils::TestAlpha::*;
-        let set1 = PartitionSet::from_iter(vec![Range::new(B, C)]);
-        let set2 = PartitionSet::from_iter(vec![Range::new(C, D)]);
+        let set1 = Set::from_iter(vec![Range::new(B, C)]);
+        let set2 = Set::from_iter(vec![Range::new(C, D)]);
 
         let sut = set1.union(&set2);
         let results: Vec<_> = sut.into_iter().collect();
@@ -335,8 +335,8 @@ mod test {
     #[test]
     fn partition_set_union_with_adjacent_ranges_contains_expected_values() {
         use testutils::TestAlpha::*;
-        let set1 = PartitionSet::from_iter(iter::once(Range::new(C,C)));
-        let set2 = PartitionSet::from_iter(iter::once(Range::new(D,D)));
+        let set1 = Set::from_iter(iter::once(Range::new(C,C)));
+        let set2 = Set::from_iter(iter::once(Range::new(D,D)));
 
         let sut = set1.union(&set2);
 
@@ -361,9 +361,9 @@ mod test {
     prop_compose!{
         fn arb_partiton_set()
             (ranges in collection::vec(arb_range(), collection::size_range(..10)))
-            -> PartitionSet<u8>
+            -> Set<u8>
             {
-                PartitionSet::from_iter(ranges)
+                Set::from_iter(ranges)
             }
     }
 
@@ -391,7 +391,7 @@ mod test {
         fn prop_partition_set_from_ranges_has_ascenting_inner_ranges(
             ranges in collection::vec(arb_range(), collection::size_range(..10)))
         {
-            let sut = PartitionSet::from_iter(ranges);
+            let sut = Set::from_iter(ranges);
 
             for (first, second) in sut.ranges.iter().tuple_windows() {
                 prop_assert!( first < second, "set is {:?}", sut);

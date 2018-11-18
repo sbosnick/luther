@@ -38,7 +38,7 @@ use std::ops::Index;
 
 use alphabet::Alphabet;
 use itertools::Itertools;
-use partition::PartitionMap;
+use partition::Partition;
 use regex::RegexContext;
 use typed_arena::Arena;
 
@@ -129,7 +129,7 @@ pub struct StateIdx(u32);
 /// are equivalant for each member of the subset.
 #[derive(Debug, PartialEq, Clone)]
 pub struct DerivativeClasses<A: Alphabet> {
-    map: PartitionMap<A, TransitionLabel>,
+    map: Partition<A, TransitionLabel>,
 }
 
 impl<'a, A, S> Dfa<A, RegexState<'a, A, S>, S>
@@ -378,7 +378,7 @@ where
 }
 
 impl<A: Alphabet> DerivativeClasses<A> {
-    pub(crate) fn new(map: PartitionMap<A, TransitionLabel>) -> DerivativeClasses<A> {
+    pub(crate) fn new(map: Partition<A, TransitionLabel>) -> DerivativeClasses<A> {
         DerivativeClasses { map }
     }
 

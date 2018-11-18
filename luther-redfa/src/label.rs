@@ -14,7 +14,7 @@ use std::iter;
 use alphabet::Alphabet;
 use dfa::DerivativeClasses;
 use itertools::Itertools;
-use partition::{MergeValue, PartitionMap};
+use partition::{MergeValue, Partition};
 use regex::{Regex, RegexContext, RegexKind, RegexVec};
 
 /// StateLabel describes types that can be used to generate a deterministic
@@ -191,10 +191,10 @@ impl<'a, A: Alphabet + Debug> StateLabel<'a, A> for RegexVec<'a, A> {
             self.map_elements(move |re| regex_to_partition_map(re, ctx))
                 .into_iter()
                 .fold1(|left, right| {
-                    PartitionMap::from_merge(left, right, &mut TransitionLabelMerger::new())
+                    Partition::from_merge(left, right, &mut TransitionLabelMerger::new())
                 })
                 .unwrap_or_else(|| {
-                    PartitionMap::new(.., TransitionLabel::first(), TransitionLabel::second())
+                    Partition::new(.., TransitionLabel::first(), TransitionLabel::second())
                 }),
         )
     }
@@ -203,14 +203,14 @@ impl<'a, A: Alphabet + Debug> StateLabel<'a, A> for RegexVec<'a, A> {
 fn regex_to_partition_map<'a, A: Alphabet>(
     regex: Regex<'a, A>,
     ctx: &'a RegexContext<'a, A>,
-) -> PartitionMap<A, TransitionLabel> {
+) -> Partition<A, TransitionLabel> {
     use self::RegexKind::*;
 
     let first = TransitionLabel::first();
     let second = TransitionLabel::second();
 
     match regex.kind() {
-        Empty => PartitionMap::new(.., first, second),
+        Empty => Partition::new(.., first, second),
         Class(class) => class.into_partition_map(first, second),
         Repetition(rep) => regex_to_partition_map(rep.inner(), ctx),
         Complement(comp) => regex_to_partition_map(comp.inner(), ctx),
@@ -231,8 +231,8 @@ fn pm_from_merge<'a, A: Alphabet>(
     first: Regex<'a, A>,
     second: Regex<'a, A>,
     ctx: &'a RegexContext<'a, A>,
-) -> PartitionMap<A, TransitionLabel> {
-    PartitionMap::from_merge(
+) -> Partition<A, TransitionLabel> {
+    Partition::from_merge(
         regex_to_partition_map(first, ctx),
         regex_to_partition_map(second, ctx),
         &mut TransitionLabelMerger::new(),
@@ -317,7 +317,7 @@ mod test {
             &self,
             _ctx: &'a RegexContext<'a, ::testutils::TestAlpha>,
         ) -> DerivativeClasses<::testutils::TestAlpha> {
-            DerivativeClasses::new(PartitionMap::new(
+            DerivativeClasses::new(Partition::new(
                 self.classes.0..self.classes.1,
                 TransitionLabel::first(),
                 TransitionLabel::second(),

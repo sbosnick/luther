@@ -8,9 +8,9 @@
 
 use itertools;
 
-pub use self::map::PartitionMap;
-pub use self::set::PartitionSet;
-pub use self::set::PartitionSetRangeIter;
+pub use self::map::Partition;
+pub use self::set::Set;
+pub use self::set::SetRangeIter;
 
 mod set;
 mod map ;
@@ -48,7 +48,7 @@ mod test {
 
     // Simple types for use in unit tests
 
-    type TestPM<V> = PartitionMap<TestAlpha, V>;
+    type TestPM<V> = Partition<TestAlpha, V>;
 
     // Unit tests
 
