@@ -28,7 +28,7 @@ fi
 mkdir -p "${coverage_dir}/luther"
 mkdir "${coverage_dir}/luther_derive"
 
-# Generate coverage data for test binaries for luther project
+# Generate coverage data for test binaries for the luther and luther-redfa crates.
 while read test_binary
 do
     # create directory
@@ -38,7 +38,7 @@ do
     # run kcov
     kcov --include-path=. --exclude-line=COV_EXCL_LINE --exclude-region=COV_EXCL_START:COV_EXCL_END "${working_dir}" "${test_binary}"
 
-done < <(cargo test --no-run --message-format json | jq --raw-output 'select(.profile.test).filenames[0]')
+done < <(cargo test -p luther -p luther-redfa --no-run --message-format json | jq --raw-output 'select(.profile.test).filenames[0]')
 
 # Generate coverage data for the luther_derive testsuite
 cargo testsuite -vv --kcov-out="${coverage_dir}/luther_derive"
