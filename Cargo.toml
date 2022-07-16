@@ -22,7 +22,7 @@ encode_unicode = "0.3.1"
 assert_matches = "1.1.0"
 quickcheck = "0.6.0"
 lazy_static = "1.0.0"
-regex = "0.2.5"
+regex = "1.5.5"
 
 [workspace]
 members = ["luther-derive", "tools/testsuite"]
