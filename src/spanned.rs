@@ -8,10 +8,10 @@
 
 //! Defines iterators and other utilities for working with `Span<T>`.
 
-use std::{fmt, io, str};
 use super::{Location, Span};
 use encode_unicode::{U8UtfExt, Utf8Char};
 use std::io::prelude::*;
+use std::{fmt, io, str};
 
 /// A failure that cannot occur.
 ///
@@ -150,7 +150,7 @@ where
 
 fn map_invalid_data<E>(error: E) -> io::Error
 where
-    E: Into<Box<::std::error::Error + Send + Sync>>,
+    E: Into<Box<dyn (::std::error::Error) + Send + Sync>>,
 {
     io::Error::new(io::ErrorKind::InvalidData, error)
 }

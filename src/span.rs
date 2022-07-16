@@ -106,8 +106,8 @@ impl From<usize> for Location {
 
 #[cfg(test)]
 mod test {
-    use std::usize;
     use super::*;
+    use std::usize;
 
     #[test]
     fn location_default_eq_location_0() {
@@ -129,7 +129,7 @@ mod test {
     #[test]
     #[should_panic]
     fn location_add_overflow_panics() {
-        Location::new(usize::max_value()) + 3;
+        let _ = Location::new(usize::max_value()) + 3;
     } // COV_EXCL_LINE
 
     #[test]
