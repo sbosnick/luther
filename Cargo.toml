@@ -25,4 +25,7 @@ lazy_static = "1.0.0"
 regex = "1.5.5"
 
 [workspace]
-members = ["luther-derive", "tools/testsuite"]
+members = ["luther-derive", "luther-redfa", "tools/testsuite"]
+
+[profile.bench]
+debug = true
